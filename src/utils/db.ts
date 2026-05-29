@@ -504,7 +504,13 @@ export async function uploadFileToDrive(filename: string, mimeType: string, base
   const config = getDatabaseConfig();
   const res = await fetchWithTimeout(config.sheetsApiUrl, {
     method: 'POST',
-    body: JSON.stringify({ action: 'uploadFile', filename, mimeType, base64Data })
+    body: JSON.stringify({ 
+      action: 'uploadFile', 
+      filename, 
+      mimeType, 
+      base64Data,
+      folderId: '1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg'
+    })
   }, 35000); // 35s timeout for heavy pictures uploads
   
   if (!res.ok) throw new Error('Gagal mengunggah bukti ke Google Drive.');

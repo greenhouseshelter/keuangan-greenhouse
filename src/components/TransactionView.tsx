@@ -6,7 +6,7 @@ import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Filter, Trash2, Edit, X, Save, HelpCircle, 
   ArrowUpRight, ArrowDownRight, Printer, AlertTriangle, Play, ChevronLeft, ChevronRight, Check, Database,
-  Camera, Paperclip, Image, Loader2, Settings
+  Camera, Paperclip, Image, Loader2, Settings, KeyRound
 } from 'lucide-react';
 
 interface TransactionViewProps {
@@ -113,6 +113,7 @@ export default function TransactionView({
 
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [drivePermissionError, setDrivePermissionError] = useState(false);
 
   // Reset form
   const resetForm = () => {
@@ -216,11 +217,67 @@ export default function TransactionView({
     reader.readAsDataURL(file);
   };
 
+  // Force Save Transaction when DriveApp permission fails (empathy fallback)
+  const handleForceSaveWithoutImage = async () => {
+    setFormError('');
+    setSuccessMsg('');
+    setUploadingFile(true);
+
+    const txId = isEditing ? editingId : `tx-${Math.floor(Date.now() + Math.random() * 1000)}`;
+    const finalImageUrl = formImage || ''; // Keep manually entered link, or empty, no upload
+
+    let finalCategory = formCategory;
+    if (currentRole === 'Pengelola') {
+      finalCategory = 'Operational';
+    }
+
+    const txData: Transaction = {
+      id: txId,
+      date: formDate,
+      project: formProject,
+      type: formType,
+      category: finalCategory,
+      amount: Number(formAmount),
+      description: formDescription.trim(),
+      recordedBy: isEditing ? (transactions.find(t => t.id === editingId)?.recordedBy || currentUser) : currentUser,
+      createdAt: isEditing ? (transactions.find(t => t.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      account: formAccount,
+      image: finalImageUrl
+    };
+
+    let success = false;
+    if (isEditing) {
+      success = await onUpdateTransaction(txData);
+    } else {
+      success = await onAddTransaction(txData);
+    }
+
+    setUploadingFile(false);
+
+    if (success) {
+      if (isEditing) {
+        addActivityLog('EDIT_TRANSAKSI_FORCE', `Mengubah Transaksi ${txId} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Pindah Manual / Tanpa Upload Drive)`);
+      } else {
+        addActivityLog('TAMBAH_TRANSAKSI_FORCE', `Menambahkan Transaksi ${txId} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Pindah Manual / Tanpa Upload Drive)`);
+      }
+      setSuccessMsg(isEditing ? 'Transaksi berhasil diupdate tanpa diunggah ke Google Drive!' : 'Transaksi berhasil ditambahkan tanpa diunggah ke Google Drive!');
+      setDrivePermissionError(false);
+      setTimeout(() => {
+        setupFilteredPageCountAndReset();
+        setShowForm(false);
+        resetForm();
+      }, 1000);
+    } else {
+      setFormError('Terjadi kesalahan koneksi saat menginput data ke database.');
+    }
+  };
+
   // Submitting form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     setSuccessMsg('');
+    setDrivePermissionError(false);
 
     if (!formAmount || Number(formAmount) <= 0) {
       setFormError('Nominal transaksi harus berupa angka positif.');
@@ -254,7 +311,11 @@ export default function TransactionView({
         const returnedUrl = await uploadFileToDrive(uploadName, fileMimeType, rawBase64);
         finalImageUrl = returnedUrl;
       } catch (err: any) {
-        setFormError(`Gagal mengunggah bukti gambar ke Google Drive: ${err.message || 'Cek koneksi internet/CORS Web App'}.`);
+        const errMsg = err.message || '';
+        if (errMsg.includes('DriveApp') || errMsg.includes('permission') || errMsg.includes('Permission')) {
+          setDrivePermissionError(true);
+        }
+        setFormError(`Gagal mengunggah bukti gambar ke Google Drive: ${errMsg}.`);
         setUploadingFile(false);
         return;
       }
@@ -901,9 +962,62 @@ export default function TransactionView({
               {/* Scrollable Form Area */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>{formError}</span>
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="min-w-0 space-y-1">
+                        <span className="font-bold block">Otorisasi Gagal / Error:</span>
+                        <p className="font-medium leading-relaxed break-words text-slate-700">{formError}</p>
+                      </div>
+                    </div>
+
+                    {drivePermissionError && (
+                      <div className="p-4 bg-slate-900 border border-slate-850 rounded-2xl text-slate-350 text-[11px] space-y-3 animate-fadeIn">
+                        <div className="flex items-center gap-2 text-amber-400 font-bold tracking-wide uppercase font-display border-b border-slate-800 pb-2">
+                          <KeyRound className="w-4 h-4 text-amber-500" />
+                          <span>Cara Mengaktifkan Pengunggahan Gambar</span>
+                        </div>
+                        <p className="leading-relaxed font-semibold text-slate-200">
+                          Sistem kami telah dikonfigurasi untuk menyimpan gambar langsung ke folder Google Drive Anda yang baru (<code className="text-emerald-400 font-mono bg-slate-950 px-1.5 py-0.5 rounded">1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg</code>). Namun, Anda harus memberikan otorisasi kepada Apps Script sekali saja agar memiliki izin memanggil fungsi <code className="text-emerald-405 font-mono bg-slate-950 px-1 py-0.5 rounded">DriveApp</code>.
+                        </p>
+                        <p className="font-semibold text-amber-300">
+                          Silakan ikuti langkah mudah ini untuk mengaktifkan izin:
+                        </p>
+                        <ol className="list-decimal pl-4.5 space-y-2 font-medium leading-normal text-slate-300">
+                          <li>Buka tab <b>Google Sheets</b> tempat database Anda berada.</li>
+                          <li>Klik menu <b>Ekstensi (Extensions)</b> &rarr; pilih <b>Apps Script</b>.</li>
+                          <li>Pada dropdown pilihan fungsi di atas editor (di sebelah tombol Run), pilih fungsi <b><code className="text-emerald-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded">initSheetsIfNeeded</code></b> atau fungsi apa pun.</li>
+                          <li>Klik tombol <b>▷ Run (Jalankan)</b> di sebelah kirinya.</li>
+                          <li>Akan muncul kotak dialog <b>Otorisasi Diperlukan</b>. Klik <b>Tinjau Izin (Review Permissions)</b>.</li>
+                          <li>Pilih Akun Gmail Anda, lalu klik tulisan kecil <b>Lanjutan / Advanced</b> di bagian kiri bawah, kemudian pilih <b>Buka Project ... (tidak aman) / Go to ... (unsafe)</b>.</li>
+                          <li>Klik tombol biru <b>Izinkan (Allow)</b>.</li>
+                        </ol>
+                        <p className="text-[10px] text-slate-400 leading-normal border-t border-slate-800 pt-2 font-semibold">
+                          💡 Setelah izin diberikan sekali, pengunggahan struk nota kuitansi langsung ke Folder Drive bersama Anda akan berjalan lancar selamanya!
+                        </p>
+                        
+                        <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/60">
+                          <button
+                            type="button"
+                            onClick={handleForceSaveWithoutImage}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-white rounded-xl text-xs flex justify-center items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-98"
+                          >
+                            <Check className="w-4 h-4" />
+                            Bypass & Simpan Transaksi Tanpa Gambar Saat Ini
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormError('');
+                              setDrivePermissionError(false);
+                            }}
+                            className="w-full py-2 bg-slate-950 hover:bg-slate-850 text-slate-400 font-bold rounded-xl text-xs flex justify-center items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            Tutup Panduan Otorisasi
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1158,33 +1272,6 @@ export default function TransactionView({
                       <Paperclip className="w-3.5 h-3.5 text-slate-550" />
                       <span>Ambil Galeri</span>
                     </button>
-                  </div>
-
-                  {/* Manual link option */}
-                  <div className="pt-2.5 border-t border-slate-200/60">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
-                        Atau Tempel Tautan Sharing Secara Manual
-                      </span>
-                      <span className="text-[9px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded font-bold font-mono">AMAN & RINGAN</span>
-                    </div>
-                    <input 
-                      type="text"
-                      placeholder="https://drive.google.com/file/d/..."
-                      value={formImage}
-                      onChange={(e) => {
-                        setFormImage(e.target.value);
-                        if (e.target.value.trim() && fileBase64) {
-                          setFileBase64(null);
-                          setFileName('');
-                          setFileMimeType('');
-                        }
-                      }}
-                      className="w-full px-3 py-1.5 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-slate-950 font-medium placeholder-slate-400 text-slate-800"
-                    />
-                    <p className="text-[9px] text-slate-400 leading-relaxed mt-1 font-medium font-sans">
-                      *Tautan disimpan langsung ke tabel transaksi Anda. Sangat disarankan jika akun Spreadsheet Anda berlainan dari akun yang aktif di browser atau limit DriveApp penuh.
-                    </p>
                   </div>
                 </div>
 
