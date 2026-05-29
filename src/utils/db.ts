@@ -54,6 +54,16 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
   }
 }
 
+async function handleNonOkResponse(res: Response, defaultMessage: string): Promise<never> {
+  try {
+    const errData = await res.json();
+    if (errData && errData.message) {
+      throw new Error(`${defaultMessage}. Detail: ${errData.message}`);
+    }
+  } catch (_) {}
+  throw new Error(`${defaultMessage} (Status Server: HTTP ${res.status} ${res.statusText || ''})`);
+}
+
 function parseSheetsResponse(responseJson: any, errorMessage: string): any[] {
   if (!responseJson || typeof responseJson !== 'object') {
     throw new Error(`${errorMessage} (Respon tidak valid/kosong dari Google Sheets: ${String(responseJson).substring(0, 150)})`);
@@ -83,7 +93,7 @@ export async function getTransactions(): Promise<Transaction[]> {
   const url = `${config.sheetsApiUrl}?action=getTransactions`;
   const res = await fetchWithTimeout(url, { method: 'GET' });
   if (!res.ok) {
-    throw new Error('Gagal mengambil data transaksi dari sistem cloud Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal mengambil data transaksi dari sistem cloud Google Sheets');
   }
   
   const responseJson = await res.json();
@@ -103,7 +113,7 @@ export async function addTransaction(tx: Transaction): Promise<boolean> {
     body: JSON.stringify({ action: 'addTransaction', transaction: tx }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menambahkan transaksi baru ke Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menambahkan transaksi baru ke Google Sheets');
   }
   return true;
 }
@@ -116,7 +126,7 @@ export async function updateTransaction(tx: Transaction): Promise<boolean> {
     body: JSON.stringify({ action: 'updateTransaction', transaction: tx }),
   });
   if (!res.ok) {
-    throw new Error('Gagal memperbarui transaksi di Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal memperbarui transaksi di Google Sheets');
   }
   return true;
 }
@@ -129,7 +139,7 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     body: JSON.stringify({ action: 'deleteTransaction', id }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menghapus transaksi dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menghapus transaksi dari Google Sheets');
   }
   return true;
 }
@@ -140,7 +150,7 @@ export async function getUsers(): Promise<User[]> {
 
   const res = await fetchWithTimeout(url, { method: 'GET' });
   if (!res.ok) {
-    throw new Error('Gagal mengambil hak akses pengguna dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal mengambil hak akses pengguna dari Google Sheets');
   }
   
   const responseJson = await res.json();
@@ -158,7 +168,7 @@ export async function addUser(user: User): Promise<boolean> {
     }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menambahkan pengguna baru ke Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menambahkan pengguna baru ke Google Sheets');
   }
   return true;
 }
@@ -175,7 +185,7 @@ export async function updateUser(updatedUser: User, oldUsername?: string): Promi
     }),
   });
   if (!res.ok) {
-    throw new Error('Gagal memperbarui data pengguna di Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal memperbarui data pengguna di Google Sheets');
   }
   return true;
 }
@@ -191,7 +201,7 @@ export async function deleteUser(username: string): Promise<boolean> {
     }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menghapus pengguna dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menghapus pengguna dari Google Sheets');
   }
   return true;
 }
@@ -201,7 +211,7 @@ export async function getAccounts(): Promise<Account[]> {
   const url = `${config.sheetsApiUrl}?action=getAccounts`;
   const res = await fetchWithTimeout(url, { method: 'GET' });
   if (!res.ok) {
-    throw new Error('Gagal mengambil akun COA dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal mengambil akun COA dari Google Sheets');
   }
   
   const responseJson = await res.json();
@@ -216,7 +226,7 @@ export async function addAccount(account: Account): Promise<boolean> {
     body: JSON.stringify({ action: 'addAccount', account }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menambahkan akun COA baru ke Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menambahkan akun COA baru ke Google Sheets');
   }
   return true;
 }
@@ -229,7 +239,7 @@ export async function updateAccount(account: Account): Promise<boolean> {
     body: JSON.stringify({ action: 'updateAccount', account }),
   });
   if (!res.ok) {
-    throw new Error('Gagal memperbarui akun COA di Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal memperbarui akun COA di Google Sheets');
   }
   return true;
 }
@@ -242,7 +252,7 @@ export async function deleteAccount(id: string): Promise<boolean> {
     body: JSON.stringify({ action: 'deleteAccount', id }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menghapus akun COA dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menghapus akun COA dari Google Sheets');
   }
   return true;
 }
@@ -252,7 +262,7 @@ export async function getProjects(): Promise<ProjectItem[]> {
   const url = `${config.sheetsApiUrl}?action=getProjects`;
   const res = await fetchWithTimeout(url, { method: 'GET' });
   if (!res.ok) {
-    throw new Error('Gagal mengambil proyek dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal mengambil proyek dari Google Sheets');
   }
   
   const responseJson = await res.json();
@@ -267,7 +277,7 @@ export async function addProject(project: ProjectItem): Promise<boolean> {
     body: JSON.stringify({ action: 'addProject', project }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menambahkan proyek baru ke Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menambahkan proyek baru ke Google Sheets');
   }
   return true;
 }
@@ -280,7 +290,7 @@ export async function updateProject(project: ProjectItem): Promise<boolean> {
     body: JSON.stringify({ action: 'updateProject', project }),
   });
   if (!res.ok) {
-    throw new Error('Gagal memperbarui proyek di Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal memperbarui proyek di Google Sheets');
   }
   return true;
 }
@@ -293,7 +303,7 @@ export async function deleteProject(id: string): Promise<boolean> {
     body: JSON.stringify({ action: 'deleteProject', id }),
   });
   if (!res.ok) {
-    throw new Error('Gagal menghapus proyek dari Google Sheets.');
+    await handleNonOkResponse(res, 'Gagal menghapus proyek dari Google Sheets');
   }
   return true;
 }
