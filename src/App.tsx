@@ -18,7 +18,7 @@ import AdminLogsView from './components/AdminLogsView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff, Copy, Check, ChevronDown, ChevronUp, ExternalLink, AlertTriangle
+  Eye, EyeOff, AlertTriangle
 } from 'lucide-react';
 
 const GOOGLE_APPS_SCRIPT_CODE = `// GOOGLE APPS SCRIPT DATABASE CONNECTOR (Code.gs)
@@ -327,8 +327,6 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [usersList, setUsersList] = useState<User[]>([]);
   const [loginError, setLoginError] = useState('');
-  const [showScriptGuide, setShowScriptGuide] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // App data state
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -652,7 +650,7 @@ export default function App() {
                   {connectionDebugInfo}
                 </div>
                 <p className="mt-1.5 text-[10.5px] text-rose-700">
-                  Sistem tidak dapat memuat data transaksi. Hubungi admin atau ikuti petunjuk <strong>Panduan Konfigurasi Google Sheets</strong> di bawah untuk mengaktifkan izin Web App Anda.
+                  Sistem tidak dapat memuat data transaksi. Silakan periksa kembali konfigurasi integrasi Google Sheets Anda atau hubungi admin jika masalah terus berlanjut.
                 </p>
               </div>
             )}
@@ -703,88 +701,6 @@ export default function App() {
                 {appLoading ? "Mengecek & Menghubungkan..." : "Log In Sekarang"}
               </button>
             </form>
-          </div>
-
-          {/* Collapsible Instruksi Google Sheets Code.gs */}
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-xs">
-            <button
-              onClick={() => setShowScriptGuide(!showScriptGuide)}
-              className="w-full px-5 py-4 flex items-center justify-between font-bold text-slate-700 bg-slate-50 border-b border-slate-100 font-display transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Panduan Konfigurasi Google Sheets</span>
-              </div>
-              {showScriptGuide ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-            </button>
-            {showScriptGuide && (
-              <div className="p-5 space-y-4 text-slate-650 leading-relaxed font-medium">
-                <p>
-                  Aplikasi ini terhubung ke Spreadsheet Anda melalui skrip perantara (Google Apps Script) agar seluruh transaksi real-time dapat tersimpan dengan aman.
-                </p>
-                <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-1">
-                  <div className="font-bold text-blue-850 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                    <AlertTriangle className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Prasyarat File Spreadsheet</span>
-                  </div>
-                  <p className="text-[11px] text-blue-700">
-                    Pastikan spreadsheet ID Anda dikonfigurasikan dengan benar di backend Anda dengan ID: <code className="bg-blue-150 px-1.5 py-0.5 rounded font-mono select-all font-bold text-blue-900">1Fhsctw6wrJ9ZuZpDz5SHIXcl08PoLi6HB5pNngMNozc</code>
-                  </p>
-                </div>
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] mt-2">Langkah Pemasangan Skrip:</h4>
-                <ol className="list-decimal pl-4.5 space-y-2.5 font-medium text-slate-650">
-                  <li>
-                    Buka Google Sheet Anda di alamat URL berikut:{' '}
-                    <a
-                      href="https://docs.google.com/spreadsheets/d/1Fhsctw6wrJ9ZuZpDz5SHIXcl08PoLi6HB5pNngMNozc/edit?gid=2062253581#gid=2062253581"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-600 hover:underline inline-flex items-center gap-0.5 font-semibold"
-                    >
-                      Buka Spreadsheet <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </li>
-                  <li>Di menu navigasi atas Sheet, pilih <strong>Extensions (Ekstensi)</strong> &gt; <strong>Apps Script</strong>.</li>
-                  <li>Hapus semua kode bawaan yang ada di editor skrip tersebut.</li>
-                  <li>
-                    Salin script perantara <strong className="text-emerald-700 font-bold">Code.gs</strong> lengkap di bawah ini menggunakan tombol salin, lalu tempelkan (paste) ke editor Apps Script Anda.
-                  </li>
-                  <li>Klik tombol <strong className="text-blue-700 font-bold">Deploy (Terapkan)</strong> &gt; <strong className="text-blue-700 font-bold">New deployment (Penerapan baru)</strong> di bagian kanan atas layar script Google.</li>
-                  <li>Klik roda gigi jenis penerapan di samping &quot;Select type&quot; dan pilih <strong className="text-slate-800 font-bold">Web app (Aplikasi web)</strong>.</li>
-                  <li>Atur konfigurasi wajib berikut:
-                    <ul className="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-slate-550">
-                      <li><strong>Execute as (Jalankan sebagai):</strong> Pilih <strong className="text-slate-800 font-semibold">&quot;Me&quot; (Saya / Email Anda)</strong></li>
-                      <li><strong>Who has access (Mengakses):</strong> Pilih <strong className="text-rose-750 font-bold">&quot;Anyone&quot; (Siapa saja / Umum)</strong> - <span className="italic">Ini mutlak agar peladen dapat saling terhubung</span></li>
-                    </ul>
-                  </li>
-                  <li>Klik tombol <strong>Deploy (Terapkan)</strong>, selesaikan permintaan izin keamanan akun Google Anda (Authorize Access).</li>
-                  <li>Salin alamat <strong>Web App URL</strong> yang dihasilkan (biasanya berakhiran `/exec`) dan pastikan tautan itu sudah dimasukkan di peladen Anda.</li>
-                </ol>
-
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-800 text-[10px] uppercase tracking-wider">SKRIP KODE (Code.gs)</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                      className={`px-3 py-1.5 flex items-center gap-1.5 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
-                        copied ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-slate-650 bg-white'
-                      }`}
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Tersalin!' : 'Salin Skrip'}</span>
-                    </button>
-                  </div>
-                  <pre className="p-3.5 bg-slate-950 text-slate-300 rounded-2xl overflow-x-auto text-[10px] font-mono leading-relaxed max-h-48 scrollbar-thin">
-                    {GOOGLE_APPS_SCRIPT_CODE}
-                  </pre>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Online only connection alert */}
