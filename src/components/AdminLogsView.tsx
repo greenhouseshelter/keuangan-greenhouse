@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getActivityLogs, clearActivityLogs, ActivityLog } from '../utils/activityLogger';
+import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   History, Search, Trash2, Printer, ChevronLeft, ChevronRight, AlertCircle, RefreshCw
 } from 'lucide-react';
@@ -8,6 +9,7 @@ export default function AdminLogsView() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [logFormat, setLogFormat] = useState<'xlsx' | 'pdf' | 'csv'>('xlsx');
   const itemsPerPage = 15;
 
   useEffect(() => {
@@ -27,7 +29,7 @@ export default function AdminLogsView() {
     setCurrentPage(1);
   };
 
-  const handleDownloadLogs = () => {
+  const handleDownloadLogs = (format: 'xlsx' | 'pdf' | 'csv') => {
     const listToExport = getFilteredLogs();
     if (listToExport.length === 0) {
       alert('Tidak ada log untuk diunduh.');
@@ -40,24 +42,31 @@ export default function AdminLogsView() {
       return [
         l.id,
         l.timestamp,
-        `"${localDate}"`,
+        localDate,
         l.username,
         l.role,
         l.action,
-        `"${l.details.replace(/"/g, '""')}"`
+        l.details
       ];
     });
 
-    const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `log_aktivitas_greenhouse_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `log_aktivitas_greenhouse_${dateStr}`;
+
+    if (format === 'csv') {
+      exportToCSV(headers, rows, fileName);
+    } else if (format === 'xlsx') {
+      exportToExcel(headers, rows, 'Log Aktivitas', fileName);
+    } else if (format === 'pdf') {
+      exportToPDF(
+        'LOG AKTIVITAS SISTEM GREENHOUSE',
+        headers,
+        rows,
+        fileName,
+        'landscape',
+        `Menampilkan log aktivitas terfilter. Total: ${listToExport.length} entri.`
+      );
+    }
   };
 
   const getFilteredLogs = () => {
@@ -116,7 +125,7 @@ export default function AdminLogsView() {
           </p>
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
           <button
             onClick={handleRefresh}
             className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-xl transition-all shadow-3xs"
@@ -124,14 +133,24 @@ export default function AdminLogsView() {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+
+          <select
+            value={logFormat}
+            onChange={(e) => setLogFormat(e.target.value as any)}
+            className="px-3 py-2.5 bg-white border border-slate-200 text-slate-650 font-semibold text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-slate-950 transition-all cursor-pointer shadow-3xs"
+          >
+            <option value="xlsx">Excel (.xlsx)</option>
+            <option value="pdf">PDF (.pdf)</option>
+            <option value="csv">CSV (.csv)</option>
+          </select>
           
           <button
-            onClick={handleDownloadLogs}
+            onClick={() => handleDownloadLogs(logFormat)}
             disabled={filteredLogs.length === 0}
             className="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-900 hover:bg-slate-850 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Printer className="w-4 h-4 text-emerald-400" />
-            Unduh Log (CSV)
+            <span>Unduh Log</span>
           </button>
 
           <button

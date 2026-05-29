@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, Project, Role, FinancialCategory, TransactionType, Account, ProjectItem } from '../types';
 import { getAccounts, getProjects, getSettings, saveSettings, uploadFileToDrive } from '../utils/db';
 import { addActivityLog } from '../utils/activityLogger';
+import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Filter, Trash2, Edit, X, Save, HelpCircle, 
   ArrowUpRight, ArrowDownRight, Printer, AlertTriangle, Play, ChevronLeft, ChevronRight, Check, Database,
@@ -43,6 +44,7 @@ export default function TransactionView({
   const [downloadEndDate, setDownloadEndDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
+  const [txDownloadFormat, setTxDownloadFormat] = useState<'xlsx' | 'pdf' | 'csv'>('xlsx');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -325,7 +327,7 @@ export default function TransactionView({
     }
   };
 
-  const handleDownloadTransactions = () => {
+  const handleDownloadTransactions = (format: 'xlsx' | 'pdf' | 'csv') => {
     let listToExport = [...transactions];
     if (downloadStartDate) {
       listToExport = listToExport.filter(t => t.date >= downloadStartDate);
@@ -345,26 +347,31 @@ export default function TransactionView({
       t.type === 'Inflow' ? 'Uang Masuk (Inflow)' : 'Uang Keluar (Outflow)',
       t.account || '-',
       t.amount.toString(),
-      `"${t.description.replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+      t.description,
       t.recordedBy,
       t.image || '-',
       t.createdAt
     ]);
 
-    const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
     const rangeStr = (downloadStartDate || 'Mulai') + '_s_d_' + (downloadEndDate || 'Sekarang');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `laporan_arus_kas_${rangeStr}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const fileName = `laporan_arus_kas_${rangeStr}`;
 
-    addActivityLog('DOWNLOAD_TRANSAKSI', `Mengunduh ${listToExport.length} data transaksi periode ${downloadStartDate || 'Awal'} s/d ${downloadEndDate || 'Akhir'}`);
+    if (format === 'csv') {
+      exportToCSV(headers, rows, fileName);
+    } else if (format === 'xlsx') {
+      exportToExcel(headers, rows, 'Laporan Kas', fileName);
+    } else if (format === 'pdf') {
+      exportToPDF(
+        'LAPORAN ARUS KAS GREENHOUSE',
+        headers,
+        rows,
+        fileName,
+        'landscape',
+        `Periode Laporan: ${downloadStartDate || 'Awal'} s/d ${downloadEndDate || 'Akhir'} | Total: ${listToExport.length} transaksi.`
+      );
+    }
+
+    addActivityLog('DOWNLOAD_TRANSAKSI', `Mengunduh ${listToExport.length} data transaksi format ${format.toUpperCase()} periode ${downloadStartDate || 'Awal'} s/d ${downloadEndDate || 'Akhir'}`);
   };
 
   const setupFilteredPageCountAndReset = () => {
@@ -699,13 +706,24 @@ export default function TransactionView({
               </div>
             </div>
           </div>
-          <button
-            onClick={handleDownloadTransactions}
-            className="w-full md:w-auto px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs shrink-0 cursor-pointer active:scale-99"
-          >
-            <Printer className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Unduh Laporan (CSV)</span>
-          </button>
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <select
+              value={txDownloadFormat}
+              onChange={(e) => setTxDownloadFormat(e.target.value as any)}
+              className="px-3 py-2 bg-white border border-slate-200 text-slate-650 font-semibold text-xs rounded-xl focus:outline-none focus:ring-1 focus:ring-slate-950 transition-all cursor-pointer shadow-3xs"
+            >
+              <option value="xlsx">Excel (.xlsx)</option>
+              <option value="pdf">PDF (.pdf)</option>
+              <option value="csv">CSV (.csv)</option>
+            </select>
+            <button
+              onClick={() => handleDownloadTransactions(txDownloadFormat)}
+              className="flex-1 md:flex-initial px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs shrink-0 cursor-pointer active:scale-99"
+            >
+              <Printer className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Unduh Laporan</span>
+            </button>
+          </div>
         </div>
       </div>
 
