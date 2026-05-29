@@ -65,7 +65,18 @@ export default function AdminDatabaseView({ onConfigChanged }: AdminDatabaseView
         onConfigChanged(updatedConfig);
         setMessage({ type: 'success', text: 'Konfigurasi database berhasil disimpan ke backend server dan lokal browser!' });
       } else {
-        setMessage({ type: 'error', text: 'Gagal menyimpan konfigurasi ke backend server.' });
+        const errorText = await response.text();
+        let errorDetail = '';
+        try {
+          const parsedError = JSON.parse(errorText);
+          errorDetail = parsedError.message || parsedError.error || errorText;
+        } catch {
+          errorDetail = errorText;
+        }
+        setMessage({ 
+          type: 'error', 
+          text: `Gagal menyimpan konfigurasi ke backend server (Status: ${response.status}). Detail: ${errorDetail}` 
+        });
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: `Gagal menyimpan konfigurasi: ${err.message || String(err)}` });

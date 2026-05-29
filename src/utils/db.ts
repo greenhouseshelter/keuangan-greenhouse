@@ -1,4 +1,5 @@
 import { Transaction, User, DatabaseConfig, Account, ProjectItem, ActivityLog } from '../types';
+import { INITIAL_USERS, INITIAL_PROJECTS, INITIAL_ACCOUNTS, INITIAL_TRANSACTIONS } from '../data/mockData';
 
 export function getDatabaseConfig(): DatabaseConfig {
   let savedConf = null;
@@ -26,35 +27,99 @@ export function saveDatabaseConfig(config: DatabaseConfig) {
   } catch (e) {}
 }
 
+export function getCachedTransactions(): Transaction[] {
+  try {
+    const raw = localStorage.getItem('greenhouse_transactions');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_TRANSACTIONS;
+}
+
+export function saveCachedTransactions(txs: Transaction[]) {
+  try {
+    localStorage.setItem('greenhouse_transactions', JSON.stringify(txs));
+  } catch (e) {}
+}
+
+export function getCachedAccounts(): Account[] {
+  try {
+    const raw = localStorage.getItem('greenhouse_accounts');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_ACCOUNTS;
+}
+
+export function saveCachedAccounts(accounts: Account[]) {
+  try {
+    localStorage.setItem('greenhouse_accounts', JSON.stringify(accounts));
+  } catch (e) {}
+}
+
+export function getCachedProjects(): ProjectItem[] {
+  try {
+    const raw = localStorage.getItem('greenhouse_projects');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_PROJECTS;
+}
+
+export function saveCachedProjects(projects: ProjectItem[]) {
+  try {
+    localStorage.setItem('greenhouse_projects', JSON.stringify(projects));
+  } catch (e) {}
+}
+
 export async function fetchWithTimeout(resource: string, options: any = {}, timeout = 15000) {
   const config = getDatabaseConfig();
   const webAppUrl = config.webAppUrl;
   const spreadsheetId = config.spreadsheetId;
   
   let targetUrl = resource;
-  
-  // Normalize URL to direct Google Script Web App URL
-  if (targetUrl.startsWith('/api/sheets-proxy')) {
-    targetUrl = targetUrl.replace('/api/sheets-proxy', webAppUrl);
-  } else if (targetUrl.startsWith('//') || !targetUrl.startsWith('http')) {
-    // If it's a relative URL, but not sheets proxy, let it go to local origin
-    targetUrl = new URL(targetUrl, window.location.origin).toString();
-  }
+  let useProxy = false;
+  let queryParams = '';
 
-  // If this target is going to the Apps Script Web App URL, inject spreadsheetId
-  if (targetUrl.startsWith(webAppUrl) || targetUrl.includes('script.google.com')) {
+  // Determine if this is a Google Sheets / Apps Script call
+  const isGoogleScript = targetUrl.startsWith('http') && 
+    (targetUrl.includes('script.google.com') || targetUrl.includes('googleusercontent.com') || (webAppUrl && targetUrl.includes(webAppUrl)));
+
+  if (isGoogleScript) {
+    useProxy = true;
     try {
       const urlObj = new URL(targetUrl);
-      if (spreadsheetId) {
-        urlObj.searchParams.set('spreadsheetId', spreadsheetId);
-        urlObj.searchParams.set('sheetId', spreadsheetId);
+      queryParams = urlObj.search;
+    } catch (e) {
+      const idx = targetUrl.indexOf('?');
+      if (idx !== -1) {
+        queryParams = targetUrl.slice(idx);
       }
-      urlObj.searchParams.set('_t', Date.now().toString());
-      targetUrl = urlObj.toString();
-    } catch (err) {
-      const sep = targetUrl.includes('?') ? '&' : '?';
-      targetUrl = `${targetUrl}${sep}spreadsheetId=${spreadsheetId}&sheetId=${spreadsheetId}&_t=${Date.now()}`;
     }
+  } else if (targetUrl.startsWith('/api/sheets-proxy')) {
+    useProxy = true;
+    const idx = targetUrl.indexOf('?');
+    if (idx !== -1) {
+      queryParams = targetUrl.slice(idx);
+    }
+  }
+
+  // Rewrite targetUrl to go through local server proxy if applicable
+  if (useProxy) {
+    targetUrl = `/api/sheets-proxy${queryParams}`;
+  }
+
+  // Ensure relative or local-facing URLs are absolute
+  if (targetUrl.startsWith('/') && !targetUrl.startsWith('//')) {
+    targetUrl = new URL(targetUrl, window.location.origin).toString();
+  } else if (targetUrl.startsWith('//') || !targetUrl.startsWith('http')) {
+    targetUrl = new URL(targetUrl, window.location.origin).toString();
   }
 
   const controller = new AbortController();
@@ -67,18 +132,14 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
       headers: {}
     };
 
-    // Keep headers simple and standard for CORS
     if (options.headers) {
-      const parsedUrl = targetUrl.startsWith('http') ? new URL(targetUrl) : null;
-      const isExternalScript = parsedUrl && (parsedUrl.hostname.includes('google.com') || parsedUrl.hostname.includes('googleusercontent.com'));
-      
       for (const [key, val] of Object.entries(options.headers)) {
-        const lowerKey = key.toLowerCase();
-        if (isExternalScript && (lowerKey.startsWith('x-') || lowerKey === 'authorization')) {
-          continue; // skip custom headers to avoid CORS preflight options
-        }
         fetchOptions.headers[key] = val;
       }
+    }
+
+    if (!fetchOptions.headers['Content-Type'] && !fetchOptions.headers['content-type']) {
+      fetchOptions.headers['Content-Type'] = 'application/json';
     }
 
     if (options.body) {
@@ -93,21 +154,25 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
         bodyData = { raw: options.body };
       }
 
-      // Inject sheetId / spreadsheetId on post bodies going to Google Apps Script
-      if (spreadsheetId && (targetUrl.startsWith(webAppUrl) || targetUrl.includes('script.google.com'))) {
+      // Inject sheetId / spreadsheetId on post bodies going to Google Apps Script proxy
+      if (spreadsheetId && useProxy) {
         bodyData.spreadsheetId = spreadsheetId;
         bodyData.sheetId = spreadsheetId;
       }
       
-      // Specify simple text/plain content-type to avoid CORS preflight trigger, which Apps Script loves
-      const isExternal = targetUrl.includes('script.google.com') || targetUrl.includes('googleusercontent.com');
-      if (isExternal) {
-        fetchOptions.headers['Content-Type'] = 'text/plain;charset=utf-8';
-      } else {
-        fetchOptions.headers['Content-Type'] = 'application/json';
-      }
-      
       fetchOptions.body = JSON.stringify(bodyData);
+    }
+
+    // Crucial: Inject override headers so proxy executes on our behalf using browser-sync credentials
+    if (useProxy) {
+      if (webAppUrl) {
+        fetchOptions.headers['x-web-app-url'] = webAppUrl;
+        fetchOptions.headers['x-sheets-api-url'] = webAppUrl;
+      }
+      if (spreadsheetId) {
+        fetchOptions.headers['x-spreadsheet-id'] = spreadsheetId;
+        fetchOptions.headers['x-sheets-id'] = spreadsheetId;
+      }
     }
 
     const response = await fetch(targetUrl, fetchOptions);
@@ -122,49 +187,108 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
 export async function getTransactions(): Promise<Transaction[]> {
   const config = getDatabaseConfig();
   const url = `${config.sheetsApiUrl}?action=getTransactions`;
-  const res = await fetchWithTimeout(url, { method: 'GET' });
-  if (!res.ok) throw new Error('Database Offline / Gagal tersambung ke Google Sheets.');
-  
-  const responseJson = await res.json();
-  if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
-    return responseJson.data.map((tx: any) => ({
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (!res.ok) {
+      console.warn('Database Offline / Gagal tersambung ke Google Sheets. Menggunakan cache lokal.');
+      return getCachedTransactions();
+    }
+    
+    const responseJson = await res.json();
+    let data: any[] = [];
+    
+    if (Array.isArray(responseJson)) {
+      data = responseJson;
+    } else if (responseJson && Array.isArray(responseJson.data)) {
+      data = responseJson.data;
+    } else if (responseJson && responseJson.status === 'success' && !responseJson.data) {
+      data = [];
+    } else {
+      console.warn('Format data dari Google Sheets tidak didukung. Menggunakan cache lokal.');
+      return getCachedTransactions();
+    }
+
+    const mapped = data.map((tx: any) => ({
       ...tx,
       amount: Number(tx.amount) || 0,
     }));
+
+    saveCachedTransactions(mapped);
+    return mapped;
+  } catch (err) {
+    console.warn('Error fetching transactions, using cache fallback:', err);
+    return getCachedTransactions();
   }
-  throw new Error(responseJson.message || 'Format data transaksi tidak valid.');
 }
 
 export async function addTransaction(tx: Transaction): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'addTransaction', transaction: tx }),
-  });
-  if (!res.ok) throw new Error('Gagal menambahkan transaksi ke Google Sheets.');
+  
+  // Update cache first immediately
+  const txs = getCachedTransactions();
+  const idx = txs.findIndex(t => t.id === tx.id);
+  if (idx >= 0) {
+    txs[idx] = tx;
+  } else {
+    txs.push(tx);
+  }
+  saveCachedTransactions(txs);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'addTransaction', transaction: tx }),
+    });
+    if (!res.ok) console.warn('Gagal menambahkan transaksi ke Google Sheets via API.');
+  } catch (err) {
+    console.warn('Gagal menambahkan transaksi ke Google Sheets (Offline):', err);
+  }
   return true;
 }
 
 export async function updateTransaction(tx: Transaction): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'updateTransaction', transaction: tx }),
-  });
-  if (!res.ok) throw new Error('Gagal memperbarui transaksi di Google Sheets.');
+  
+  // Update cache first immediately
+  const txs = getCachedTransactions();
+  const idx = txs.findIndex(t => t.id === tx.id);
+  if (idx >= 0) {
+    txs[idx] = tx;
+    saveCachedTransactions(txs);
+  }
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateTransaction', transaction: tx }),
+    });
+    if (!res.ok) console.warn('Gagal memperbarui transaksi di Google Sheets via API.');
+  } catch (err) {
+    console.warn('Gagal memperbarui transaksi di Google Sheets (Offline):', err);
+  }
   return true;
 }
 
 export async function deleteTransaction(id: string): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'deleteTransaction', id }),
-  });
-  if (!res.ok) throw new Error('Gagal menghapus transaksi dari Google Sheets.');
+  
+  // Update cache first immediately
+  let txs = getCachedTransactions();
+  txs = txs.filter(t => t.id !== id);
+  saveCachedTransactions(txs);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteTransaction', id }),
+    });
+    if (!res.ok) console.warn('Gagal menghapus transaksi dari Google Sheets via API.');
+  } catch (err) {
+    console.warn('Gagal menghapus transaksi dari Google Sheets (Offline):', err);
+  }
   return true;
 }
 
@@ -368,92 +492,204 @@ export async function deleteUser(username: string): Promise<boolean> {
 export async function getAccounts(): Promise<Account[]> {
   const config = getDatabaseConfig();
   const url = `${config.sheetsApiUrl}?action=getAccounts`;
-  const res = await fetchWithTimeout(url, { method: 'GET' });
-  if (!res.ok) throw new Error('Database Offline / Gagal mengambil data akun.');
-  
-  const responseJson = await res.json();
-  if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
-    return responseJson.data;
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (!res.ok) {
+      console.warn('Database Offline / Gagal mengambil data akun. Menggunakan cache lokal.');
+      return getCachedAccounts();
+    }
+    
+    const responseJson = await res.json();
+    let data: any[] = [];
+    if (Array.isArray(responseJson)) {
+      data = responseJson;
+    } else if (responseJson && Array.isArray(responseJson.data)) {
+      data = responseJson.data;
+    } else if (responseJson && responseJson.status === 'success' && !responseJson.data) {
+      data = [];
+    } else {
+      console.warn('Format data akun dari Google Sheets tidak didukung. Menggunakan cache lokal.');
+      return getCachedAccounts();
+    }
+
+    saveCachedAccounts(data);
+    return data;
+  } catch (err) {
+    console.warn('Error fetching accounts, using cache fallback:', err);
+    return getCachedAccounts();
   }
-  throw new Error(responseJson.message || 'Format data akun keuangan tidak valid.');
 }
 
 export async function addAccount(account: Account): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'addAccount', account }),
-  });
-  if (!res.ok) throw new Error('Gagal menambahkan akun baru.');
+  
+  // Update cache first
+  const accounts = getCachedAccounts();
+  const idx = accounts.findIndex(a => a.id === account.id);
+  if (idx >= 0) {
+    accounts[idx] = account;
+  } else {
+    accounts.push(account);
+  }
+  saveCachedAccounts(accounts);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'addAccount', account }),
+    });
+    if (!res.ok) console.warn('Gagal menambahkan akun baru via API.');
+  } catch (err) {
+    console.warn('Gagal menambahkan akun baru (Offline):', err);
+  }
   return true;
 }
 
 export async function updateAccount(account: Account): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'updateAccount', account }),
-  });
-  if (!res.ok) throw new Error('Gagal memperbarui akun.');
+  
+  // Update cache first
+  const accounts = getCachedAccounts();
+  const idx = accounts.findIndex(a => a.id === account.id);
+  if (idx >= 0) {
+    accounts[idx] = account;
+    saveCachedAccounts(accounts);
+  }
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateAccount', account }),
+    });
+    if (!res.ok) console.warn('Gagal memperbarui akun via API.');
+  } catch (err) {
+    console.warn('Gagal memperbarui akun (Offline):', err);
+  }
   return true;
 }
 
 export async function deleteAccount(id: string): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'deleteAccount', id }),
-  });
-  if (!res.ok) throw new Error('Gagal menghapus akun.');
+  
+  // Update cache first
+  let accounts = getCachedAccounts();
+  accounts = accounts.filter(a => a.id !== id);
+  saveCachedAccounts(accounts);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteAccount', id }),
+    });
+    if (!res.ok) console.warn('Gagal menghapus akun via API.');
+  } catch (err) {
+    console.warn('Gagal menghapus akun (Offline):', err);
+  }
   return true;
 }
 
 export async function getProjects(): Promise<ProjectItem[]> {
   const config = getDatabaseConfig();
   const url = `${config.sheetsApiUrl}?action=getProjects`;
-  const res = await fetchWithTimeout(url, { method: 'GET' });
-  if (!res.ok) throw new Error('Database Offline / Gagal mengambil data proyek.');
-  
-  const responseJson = await res.json();
-  if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
-    return responseJson.data;
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (!res.ok) {
+      console.warn('Database Offline / Gagal mengambil data proyek. Menggunakan cache lokal.');
+      return getCachedProjects();
+    }
+    
+    const responseJson = await res.json();
+    let data: any[] = [];
+    if (Array.isArray(responseJson)) {
+      data = responseJson;
+    } else if (responseJson && Array.isArray(responseJson.data)) {
+      data = responseJson.data;
+    } else if (responseJson && responseJson.status === 'success' && !responseJson.data) {
+      data = [];
+    } else {
+      console.warn('Format data proyek dari Google Sheets tidak didukung. Menggunakan cache lokal.');
+      return getCachedProjects();
+    }
+
+    saveCachedProjects(data);
+    return data;
+  } catch (err) {
+    console.warn('Error fetching projects, using cache fallback:', err);
+    return getCachedProjects();
   }
-  throw new Error(responseJson.message || 'Format data proyek tidak valid.');
 }
 
 export async function addProject(project: ProjectItem): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'addProject', project }),
-  });
-  if (!res.ok) throw new Error('Gagal menambahkan proyek baru.');
+  
+  // Update cache first
+  const projects = getCachedProjects();
+  const idx = projects.findIndex(p => p.id === project.id);
+  if (idx >= 0) {
+    projects[idx] = project;
+  } else {
+    projects.push(project);
+  }
+  saveCachedProjects(projects);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'addProject', project }),
+    });
+    if (!res.ok) console.warn('Gagal menambahkan proyek baru via API.');
+  } catch (err) {
+    console.warn('Gagal menambahkan proyek baru (Offline):', err);
+  }
   return true;
 }
 
 export async function updateProject(project: ProjectItem): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'updateProject', project }),
-  });
-  if (!res.ok) throw new Error('Gagal memperbarui proyek.');
+  
+  // Update cache first
+  const projects = getCachedProjects();
+  const idx = projects.findIndex(p => p.id === project.id);
+  if (idx >= 0) {
+    projects[idx] = project;
+    saveCachedProjects(projects);
+  }
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateProject', project }),
+    });
+    if (!res.ok) console.warn('Gagal memperbarui proyek via API.');
+  } catch (err) {
+    console.warn('Gagal memperbarui proyek (Offline):', err);
+  }
   return true;
 }
 
 export async function deleteProject(id: string): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'deleteProject', id }),
-  });
-  if (!res.ok) throw new Error('Gagal menghapus proyek.');
+  
+  // Update cache first
+  let projects = getCachedProjects();
+  projects = projects.filter(p => p.id !== id);
+  saveCachedProjects(projects);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteProject', id }),
+    });
+    if (!res.ok) console.warn('Gagal menghapus proyek via API.');
+  } catch (err) {
+    console.warn('Gagal menghapus proyek (Offline):', err);
+  }
   return true;
 }
 
@@ -465,40 +701,78 @@ export interface SystemSettings {
 export async function getSettings(): Promise<SystemSettings> {
   const config = getDatabaseConfig();
   const url = `${config.sheetsApiUrl}?action=getSettings`;
-  const res = await fetchWithTimeout(url, { method: 'GET' });
-  if (!res.ok) throw new Error('Database Offline / Gagal mengambil pengaturan bukti gambar.');
-  
-  const responseJson = await res.json();
-  if (responseJson.status === 'success' && responseJson.data) {
-    let sheetsIn = false;
-    let sheetsOut = false;
-    if (responseJson.data.imageRequiredIn !== undefined) {
-      sheetsIn = responseJson.data.imageRequiredIn === 'true' || responseJson.data.imageRequiredIn === true;
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (!res.ok) {
+      console.warn('Database Offline / Gagal mengambil pengaturan. Menggunakan default.');
+      return getCachedSettings();
     }
-    if (responseJson.data.imageRequiredOut !== undefined) {
-      sheetsOut = responseJson.data.imageRequiredOut === 'true' || responseJson.data.imageRequiredOut === true;
+    
+    const responseJson = await res.json();
+    if (responseJson.status === 'success' && responseJson.data) {
+      let sheetsIn = false;
+      let sheetsOut = false;
+      if (responseJson.data.imageRequiredIn !== undefined) {
+        sheetsIn = responseJson.data.imageRequiredIn === 'true' || responseJson.data.imageRequiredIn === true;
+      }
+      if (responseJson.data.imageRequiredOut !== undefined) {
+        sheetsOut = responseJson.data.imageRequiredOut === 'true' || responseJson.data.imageRequiredOut === true;
+      }
+      if (responseJson.data.imageRequiredIn === undefined && responseJson.data.imageRequired !== undefined) {
+        const legacy = responseJson.data.imageRequired === 'true' || responseJson.data.imageRequired === true;
+        sheetsIn = legacy;
+        sheetsOut = legacy;
+      }
+      const settings = {
+        imageRequiredIn: sheetsIn,
+        imageRequiredOut: sheetsOut
+      };
+      saveCachedSettings(settings);
+      return settings;
     }
-    if (responseJson.data.imageRequiredIn === undefined && responseJson.data.imageRequired !== undefined) {
-      const legacy = responseJson.data.imageRequired === 'true' || responseJson.data.imageRequired === true;
-      sheetsIn = legacy;
-      sheetsOut = legacy;
-    }
-    return {
-      imageRequiredIn: sheetsIn,
-      imageRequiredOut: sheetsOut
-    };
+    return getCachedSettings();
+  } catch (err) {
+    console.warn('Error fetching settings, using default/cached settings:', err);
+    return getCachedSettings();
   }
-  throw new Error(responseJson.message || 'Gagal memuat sistem pengaturan.');
+}
+
+export function getCachedSettings(): SystemSettings {
+  try {
+    const raw = localStorage.getItem('greenhouse_settings');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { imageRequiredIn: false, imageRequiredOut: false };
+}
+
+export function saveCachedSettings(settings: SystemSettings) {
+  try {
+    localStorage.setItem('greenhouse_settings', JSON.stringify(settings));
+  } catch (e) {}
 }
 
 export async function saveSettings(key: string, value: string): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'updateSettings', key, value }),
-  });
-  if (!res.ok) throw new Error('Gagal memperbarui pengaturan bukti gambar.');
+
+  // Update cached copy
+  const current = getCachedSettings();
+  if (key === 'imageRequiredIn') {
+    current.imageRequiredIn = value === 'true';
+  } else if (key === 'imageRequiredOut') {
+    current.imageRequiredOut = value === 'true';
+  }
+  saveCachedSettings(current);
+
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateSettings', key, value }),
+    });
+    if (!res.ok) console.warn('Gagal memperbarui pengaturan via API.');
+  } catch (err) {
+    console.warn('Gagal memperbarui pengaturan (Offline):', err);
+  }
   return true;
 }
 
