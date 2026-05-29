@@ -10,7 +10,14 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
+
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Prevent HTTP caching of API requests to make sure separate tabs get active, up-to-date online/offline status
 app.use('/api', (req, res, next) => {
@@ -26,7 +33,6 @@ const CONFIG_FILE = path.join(process.cwd(), 'backend_config.json');
 function getBackendConfig() {
   let webAppUrl = '';
   let spreadsheetId = '';
-  let driveFolderId = '';
 
   try {
     if (fs.existsSync(CONFIG_FILE)) {
@@ -34,7 +40,6 @@ function getBackendConfig() {
       const parsed = JSON.parse(content);
       webAppUrl = parsed.webAppUrl || '';
       spreadsheetId = parsed.spreadsheetId || '';
-      driveFolderId = parsed.driveFolderId || '';
     }
   } catch (err) {
     console.error('Error reading backend config file:', err);
@@ -47,22 +52,8 @@ function getBackendConfig() {
   if (!spreadsheetId) {
     spreadsheetId = process.env.VITE_SPREADSHEET_ID || process.env.SPREADSHEET_ID || '';
   }
-  if (!driveFolderId) {
-    driveFolderId = process.env.VITE_DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID || '1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg';
-  }
 
-  return { webAppUrl, spreadsheetId, driveFolderId };
-}
-
-// Save configuration in backend
-function saveBackendConfig(config: { webAppUrl: string; spreadsheetId: string; driveFolderId?: string }) {
-  try {
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('Error writing backend config file:', err);
-    return false;
-  }
+  return { webAppUrl, spreadsheetId };
 }
 
 // Lazy-loaded Gemini AI client to prevent crash on startup if key is missing
@@ -95,38 +86,44 @@ app.get('/api/config', (req, res) => {
   const cfg = getBackendConfig();
   res.json({
     isConfigured: !!cfg.webAppUrl,
-    mode: cfg.webAppUrl ? 'sheets' : 'local',
-    webAppUrl: cfg.webAppUrl || '',
-    spreadsheetId: cfg.spreadsheetId || '',
-    driveFolderId: cfg.driveFolderId || ''
+    mode: cfg.webAppUrl ? 'sheets' : 'local'
   });
 });
 
-app.post('/api/config', (req, res) => {
-  const { webAppUrl, spreadsheetId, driveFolderId } = req.body;
-  const success = saveBackendConfig({
-    webAppUrl: (webAppUrl || '').trim(),
-    spreadsheetId: (spreadsheetId || '').trim(),
-    driveFolderId: (driveFolderId || '').trim()
-  });
+app.post('/api/upload', (req, res) => {
+  try {
+    const { filename, mimeType, base64Data } = req.body;
+    if (!filename || !base64Data) {
+      return res.status(400).json({ status: 'error', message: 'Filename and base64Data are required.' });
+    }
 
-  if (success) {
-    res.json({ status: 'success', isConfigured: !!webAppUrl });
-  } else {
-    res.status(500).json({ status: 'error', message: 'Failed to save configuration on backend script' });
+    const base64Str = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Str, 'base64');
+
+    const ext = path.extname(filename) || '.jpg';
+    const baseName = path.basename(filename, ext).replace(/[^a-zA-Z0-9]/g, '_');
+    const safeFilename = `${baseName}_${Date.now()}${ext}`;
+    const filePath = path.join(UPLOADS_DIR, safeFilename);
+
+    fs.writeFileSync(filePath, buffer);
+
+    const fileUrl = `/uploads/${safeFilename}`;
+    return res.json({
+      status: 'success',
+      data: {
+        url: fileUrl
+      }
+    });
+  } catch (error: any) {
+    console.error('File upload error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Gagal menyimpan bukti transaksi ke server.' });
   }
 });
 
 app.all('/api/sheets-proxy', async (req, res): Promise<any> => {
   const config = getBackendConfig();
-
-  // Support headers override for pre-save connection test
-  const customUrl = req.headers['x-sheets-api-url'] as string || req.headers['x-web-app-url'] as string;
-  const customSpreadsheetId = req.headers['x-sheets-id'] as string || req.headers['x-spreadsheet-id'] as string;
-
-  const resolvedCustomUrl = (customUrl && customUrl.startsWith('http')) ? customUrl.trim() : null;
-  const webAppUrl = resolvedCustomUrl || config.webAppUrl || '';
-  const spreadsheetId = (resolvedCustomUrl && customSpreadsheetId) ? customSpreadsheetId.trim() : config.spreadsheetId || '';
+  const webAppUrl = config.webAppUrl || '';
+  const spreadsheetId = config.spreadsheetId || '';
 
   if (!webAppUrl) {
     return res.status(400).json({ status: 'error', message: 'Google Sheets Web App URL is not configured on the server.' });

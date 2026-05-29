@@ -2,29 +2,17 @@ import { Transaction, User, DatabaseConfig, Account, ProjectItem, ActivityLog } 
 import { INITIAL_USERS, INITIAL_PROJECTS, INITIAL_ACCOUNTS, INITIAL_TRANSACTIONS } from '../data/mockData';
 
 export function getDatabaseConfig(): DatabaseConfig {
-  let savedConf = null;
-  try {
-    const raw = localStorage.getItem('greenhouse_db_config');
-    if (raw) savedConf = JSON.parse(raw);
-  } catch (e) {}
-
-  const webAppUrl = savedConf?.webAppUrl || savedConf?.sheetsApiUrl || "https://script.google.com/macros/s/AKfycby-930U2vtfb-8SMm1ts9qrJfMi5qILo3NCdOLh6X-PDLvTr0WE6TIiKJp3J9XJ_pvn/exec";
-  const spreadsheetId = savedConf?.spreadsheetId || "1Bg49SSvPGncwpM9a31ug7c3q12zyMy38ABLplCjMY6E";
-  const driveFolderId = savedConf?.driveFolderId || "1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg";
-
   return {
     mode: 'sheets',
-    sheetsApiUrl: webAppUrl,
-    webAppUrl: webAppUrl,
-    spreadsheetId: spreadsheetId,
-    driveFolderId: driveFolderId
+    sheetsApiUrl: '/api/sheets-proxy',
+    webAppUrl: '/api/sheets-proxy',
+    spreadsheetId: '',
+    driveFolderId: ''
   };
 }
 
 export function saveDatabaseConfig(config: DatabaseConfig) {
-  try {
-    localStorage.setItem('greenhouse_db_config', JSON.stringify(config));
-  } catch (e) {}
+  // Connection parameters are stored and handled securely on the backend only
 }
 
 export function getCachedTransactions(): Transaction[] {
@@ -79,41 +67,7 @@ export function saveCachedProjects(projects: ProjectItem[]) {
 }
 
 export async function fetchWithTimeout(resource: string, options: any = {}, timeout = 15000) {
-  const config = getDatabaseConfig();
-  const webAppUrl = config.webAppUrl;
-  const spreadsheetId = config.spreadsheetId;
-  
   let targetUrl = resource;
-  let useProxy = false;
-  let queryParams = '';
-
-  // Determine if this is a Google Sheets / Apps Script call
-  const isGoogleScript = targetUrl.startsWith('http') && 
-    (targetUrl.includes('script.google.com') || targetUrl.includes('googleusercontent.com') || (webAppUrl && targetUrl.includes(webAppUrl)));
-
-  if (isGoogleScript) {
-    useProxy = true;
-    try {
-      const urlObj = new URL(targetUrl);
-      queryParams = urlObj.search;
-    } catch (e) {
-      const idx = targetUrl.indexOf('?');
-      if (idx !== -1) {
-        queryParams = targetUrl.slice(idx);
-      }
-    }
-  } else if (targetUrl.startsWith('/api/sheets-proxy')) {
-    useProxy = true;
-    const idx = targetUrl.indexOf('?');
-    if (idx !== -1) {
-      queryParams = targetUrl.slice(idx);
-    }
-  }
-
-  // Rewrite targetUrl to go through local server proxy if applicable
-  if (useProxy) {
-    targetUrl = `/api/sheets-proxy${queryParams}`;
-  }
 
   // Ensure relative or local-facing URLs are absolute
   if (targetUrl.startsWith('/') && !targetUrl.startsWith('//')) {
@@ -129,49 +83,17 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
     const fetchOptions: any = {
       method: options.method || 'GET',
       signal: controller.signal,
-      headers: {}
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      }
     };
 
-    if (options.headers) {
-      for (const [key, val] of Object.entries(options.headers)) {
-        fetchOptions.headers[key] = val;
-      }
-    }
-
-    if (!fetchOptions.headers['Content-Type'] && !fetchOptions.headers['content-type']) {
-      fetchOptions.headers['Content-Type'] = 'application/json';
-    }
-
     if (options.body) {
-      let bodyData: any = {};
-      try {
-        if (typeof options.body === 'string') {
-          bodyData = JSON.parse(options.body);
-        } else {
-          bodyData = { ...options.body };
-        }
-      } catch (err) {
-        bodyData = { raw: options.body };
-      }
-
-      // Inject sheetId / spreadsheetId on post bodies going to Google Apps Script proxy
-      if (spreadsheetId && useProxy) {
-        bodyData.spreadsheetId = spreadsheetId;
-        bodyData.sheetId = spreadsheetId;
-      }
-      
-      fetchOptions.body = JSON.stringify(bodyData);
-    }
-
-    // Crucial: Inject override headers so proxy executes on our behalf using browser-sync credentials
-    if (useProxy) {
-      if (webAppUrl) {
-        fetchOptions.headers['x-web-app-url'] = webAppUrl;
-        fetchOptions.headers['x-sheets-api-url'] = webAppUrl;
-      }
-      if (spreadsheetId) {
-        fetchOptions.headers['x-spreadsheet-id'] = spreadsheetId;
-        fetchOptions.headers['x-sheets-id'] = spreadsheetId;
+      if (typeof options.body === 'string') {
+        fetchOptions.body = options.body;
+      } else {
+        fetchOptions.body = JSON.stringify(options.body);
       }
     }
 
@@ -777,25 +699,24 @@ export async function saveSettings(key: string, value: string): Promise<boolean>
 }
 
 export async function uploadFileToDrive(filename: string, mimeType: string, base64Data: string): Promise<string> {
-  const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
+  const res = await fetch('/api/upload', {
     method: 'POST',
-    body: JSON.stringify({ 
-      action: 'uploadFile', 
-      filename, 
-      mimeType, 
-      base64Data,
-      folderId: config.driveFolderId || '1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg'
-    })
-  }, 35000); // 35s timeout for heavy pictures uploads
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ filename, mimeType, base64Data })
+  });
   
-  if (!res.ok) throw new Error('Gagal mengunggah bukti ke Google Drive.');
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => ({}));
+    throw new Error(errorJson.message || 'Gagal mengunggah bukti ke server.');
+  }
   
   const resJson = await res.json();
   if (resJson.status === 'success' && resJson.data && resJson.data.url) {
     return resJson.data.url;
   }
-  throw new Error(resJson.message || 'Tanggapan unggah file Google Drive tidak dikenal.');
+  throw new Error('Format tanggapan unggahan tidak valid.');
 }
 
 export async function getActivityLogsFromSheets(): Promise<ActivityLog[]> {
