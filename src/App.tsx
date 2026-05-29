@@ -15,11 +15,10 @@ import AdminAccountsView from './components/AdminAccountsView';
 import AdminProjectsView from './components/AdminProjectsView';
 import ChangePasswordView from './components/ChangePasswordView';
 import AdminLogsView from './components/AdminLogsView';
-import UserManualView from './components/UserManualView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff, BookOpen
+  Eye, EyeOff
 } from 'lucide-react';
 
 export default function App() {
@@ -261,7 +260,6 @@ export default function App() {
       items.push({ id: 'logs', name: 'Log Aktivitas', icon: Shield });
     }
 
-    items.push({ id: 'panduan', name: 'Panduan Multi-Role', icon: BookOpen });
     items.push({ id: 'ubah-password', name: 'Ganti Password', icon: KeyRound });
 
     return items;
@@ -642,10 +640,6 @@ export default function App() {
 
           {activeTab === 'proyek' && (currentUser.role === 'Admin' || currentUser.role === 'Finance' || currentUser.role === 'Accounting') && (
             <AdminProjectsView />
-          )}
-
-          {activeTab === 'panduan' && (
-            <UserManualView />
           )}
 
           {activeTab === 'ubah-password' && (
