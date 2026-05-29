@@ -9,12 +9,14 @@ export function getDatabaseConfig(): DatabaseConfig {
 
   const webAppUrl = savedConf?.webAppUrl || savedConf?.sheetsApiUrl || "https://script.google.com/macros/s/AKfycby-930U2vtfb-8SMm1ts9qrJfMi5qILo3NCdOLh6X-PDLvTr0WE6TIiKJp3J9XJ_pvn/exec";
   const spreadsheetId = savedConf?.spreadsheetId || "1Bg49SSvPGncwpM9a31ug7c3q12zyMy38ABLplCjMY6E";
+  const driveFolderId = savedConf?.driveFolderId || "1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg";
 
   return {
     mode: 'sheets',
     sheetsApiUrl: webAppUrl,
     webAppUrl: webAppUrl,
-    spreadsheetId: spreadsheetId
+    spreadsheetId: spreadsheetId,
+    driveFolderId: driveFolderId
   };
 }
 
@@ -509,7 +511,7 @@ export async function uploadFileToDrive(filename: string, mimeType: string, base
       filename, 
       mimeType, 
       base64Data,
-      folderId: '1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg'
+      folderId: config.driveFolderId || '1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg'
     })
   }, 35000); // 35s timeout for heavy pictures uploads
   

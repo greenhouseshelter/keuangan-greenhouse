@@ -15,6 +15,7 @@ import AdminAccountsView from './components/AdminAccountsView';
 import AdminProjectsView from './components/AdminProjectsView';
 import ChangePasswordView from './components/ChangePasswordView';
 import AdminLogsView from './components/AdminLogsView';
+import AdminDatabaseView from './components/AdminDatabaseView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
@@ -256,6 +257,7 @@ export default function App() {
     }
 
     if (role === 'Admin') {
+      items.push({ id: 'database', name: 'Pengaturan Database', icon: Database });
       items.push({ id: 'pengguna', name: 'Kelola Hak Akses', icon: Users2 });
       items.push({ id: 'logs', name: 'Log Aktivitas', icon: Shield });
     }
@@ -624,6 +626,10 @@ export default function App() {
 
           {activeTab === 'analisis' && (
             <FinancialAnalysis transactions={transactions} />
+          )}
+
+          {activeTab === 'database' && currentUser.role === 'Admin' && (
+            <AdminDatabaseView onConfigChanged={(cfg) => setDbConfig(cfg)} />
           )}
 
           {activeTab === 'pengguna' && currentUser.role === 'Admin' && (

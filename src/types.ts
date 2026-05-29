@@ -42,6 +42,7 @@ export interface DatabaseConfig {
   sheetsApiUrl: string; // Deprecated but kept as fallback/computed Web App URL
   webAppUrl: string;    // Modern Web App script URL
   spreadsheetId: string; // Google Sheets Spreadsheet ID
+  driveFolderId?: string; // Optional Google Drive folder for image attachments
 }
 
 export interface ActivityLog {

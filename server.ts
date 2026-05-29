@@ -26,6 +26,7 @@ const CONFIG_FILE = path.join(process.cwd(), 'backend_config.json');
 function getBackendConfig() {
   let webAppUrl = '';
   let spreadsheetId = '';
+  let driveFolderId = '';
 
   try {
     if (fs.existsSync(CONFIG_FILE)) {
@@ -33,6 +34,7 @@ function getBackendConfig() {
       const parsed = JSON.parse(content);
       webAppUrl = parsed.webAppUrl || '';
       spreadsheetId = parsed.spreadsheetId || '';
+      driveFolderId = parsed.driveFolderId || '';
     }
   } catch (err) {
     console.error('Error reading backend config file:', err);
@@ -45,12 +47,15 @@ function getBackendConfig() {
   if (!spreadsheetId) {
     spreadsheetId = process.env.VITE_SPREADSHEET_ID || process.env.SPREADSHEET_ID || '';
   }
+  if (!driveFolderId) {
+    driveFolderId = process.env.VITE_DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID || '1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg';
+  }
 
-  return { webAppUrl, spreadsheetId };
+  return { webAppUrl, spreadsheetId, driveFolderId };
 }
 
 // Save configuration in backend
-function saveBackendConfig(config: { webAppUrl: string; spreadsheetId: string }) {
+function saveBackendConfig(config: { webAppUrl: string; spreadsheetId: string; driveFolderId?: string }) {
   try {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
     return true;
@@ -92,15 +97,17 @@ app.get('/api/config', (req, res) => {
     isConfigured: !!cfg.webAppUrl,
     mode: cfg.webAppUrl ? 'sheets' : 'local',
     webAppUrl: cfg.webAppUrl || '',
-    spreadsheetId: cfg.spreadsheetId || ''
+    spreadsheetId: cfg.spreadsheetId || '',
+    driveFolderId: cfg.driveFolderId || ''
   });
 });
 
 app.post('/api/config', (req, res) => {
-  const { webAppUrl, spreadsheetId } = req.body;
+  const { webAppUrl, spreadsheetId, driveFolderId } = req.body;
   const success = saveBackendConfig({
     webAppUrl: (webAppUrl || '').trim(),
-    spreadsheetId: (spreadsheetId || '').trim()
+    spreadsheetId: (spreadsheetId || '').trim(),
+    driveFolderId: (driveFolderId || '').trim()
   });
 
   if (success) {
