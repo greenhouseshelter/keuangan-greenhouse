@@ -1079,51 +1079,64 @@ export default function TransactionView({
                   />
 
                   {/* File preview / State info */}
-                  {fileBase64 || formImage ? (
-                    <div className="relative border border-slate-200 rounded-xl bg-white p-3 flex items-center justify-between gap-3 animate-fadeIn">
-                      <div className="flex items-center gap-3">
-                        <img 
-                          src={fileBase64 || formImage} 
-                          alt="Preview Bukti" 
-                          className="w-12 h-12 rounded-lg object-cover border border-slate-200" 
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="text-left">
-                          <p className="text-xs font-bold text-slate-800 truncate max-w-[200px]">
-                            {fileName || 'bukti_terlampir.jpg'}
-                          </p>
-                          <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
-                            <Check className="w-3 h-3 text-emerald-500" />
-                            <span>Siap diunggah / terpasang</span>
+                  {(() => {
+                    const hasAttachment = fileBase64 || formImage;
+                    if (!hasAttachment) {
+                      return (
+                        <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center bg-white flex flex-col items-center justify-center gap-2">
+                          <div className="p-2 bg-slate-50 text-slate-400 rounded-full border border-slate-100">
+                            <Image className="w-6 h-6" />
+                          </div>
+                          <p className="text-[10px] text-slate-500 max-w-xs font-medium">
+                            Ambil foto fisik kuitansi pengeluaran atau nota langsung dengan Kamera, atau unggah dari Galeri perangkat Anda.
                           </p>
                         </div>
+                      );
+                    }
+                    const isDirectImage = !!fileBase64 || (!!formImage && (formImage.startsWith('data:') || formImage.startsWith('blob:') || !!formImage.match(/\.(jpeg|jpg|gif|png|webp)/i)));
+                    return (
+                      <div className="relative border border-slate-200 rounded-xl bg-white p-3 flex items-center justify-between gap-3 animate-fadeIn">
+                        <div className="flex items-center gap-3">
+                          {isDirectImage ? (
+                            <img 
+                              src={fileBase64 || formImage} 
+                              alt="Preview Bukti" 
+                              className="w-12 h-12 rounded-lg object-cover border border-slate-200" 
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 bg-slate-900 border border-slate-800 text-emerald-450 rounded-lg flex items-center justify-center font-bold text-[10px] font-mono shadow-inner select-none shrink-0 text-center">
+                              LINK
+                            </div>
+                          )}
+                          <div className="text-left min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate max-w-[160px] sm:max-w-[200px]">
+                              {fileName || (!isDirectImage ? 'Tautan Sharing Drive' : 'bukti_terlampir.jpg')}
+                            </p>
+                            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
+                              <Check className="w-3 h-3 text-emerald-500" />
+                              <span className="truncate">{!isDirectImage ? 'Tautan disimpan di entri' : 'Siap diunggah / terpasang'}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFileBase64(null);
+                            setFileName('');
+                            setFileMimeType('');
+                            setFormImage('');
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                            if (cameraInputRef.current) cameraInputRef.current.value = '';
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          title="Hapus lampiran"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFileBase64(null);
-                          setFileName('');
-                          setFileMimeType('');
-                          setFormImage('');
-                          if (fileInputRef.current) fileInputRef.current.value = '';
-                          if (cameraInputRef.current) cameraInputRef.current.value = '';
-                        }}
-                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="Hapus gambar"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center bg-white flex flex-col items-center justify-center gap-2">
-                      <div className="p-2 bg-slate-50 text-slate-400 rounded-full border border-slate-100">
-                        <Image className="w-6 h-6 animate-pulse" />
-                      </div>
-                      <p className="text-[10px] text-slate-500 max-w-xs font-medium">
-                        Ambil foto fisik kuitansi pengeluaran atau nota langsung dengan Kamera, atau unggah dari Galeri perangkat Anda.
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Action select buttons */}
                   <div className="grid grid-cols-2 gap-2">
@@ -1131,7 +1144,7 @@ export default function TransactionView({
                       type="button"
                       onClick={() => cameraInputRef.current?.click()}
                       disabled={uploadingFile}
-                      className="flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-250 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-xs transition-colors shadow-2xs"
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-250 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                     >
                       <Camera className="w-3.5 h-3.5 text-slate-550" />
                       <span>Ambil Kamera</span>
@@ -1140,11 +1153,38 @@ export default function TransactionView({
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile}
-                      className="flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-250 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-xs transition-colors shadow-2xs"
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-250 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-xs transition-colors shadow-2xs cursor-pointer"
                     >
                       <Paperclip className="w-3.5 h-3.5 text-slate-550" />
                       <span>Ambil Galeri</span>
                     </button>
+                  </div>
+
+                  {/* Manual link option */}
+                  <div className="pt-2.5 border-t border-slate-200/60">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
+                        Atau Tempel Tautan Sharing Secara Manual
+                      </span>
+                      <span className="text-[9px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded font-bold font-mono">AMAN & RINGAN</span>
+                    </div>
+                    <input 
+                      type="text"
+                      placeholder="https://drive.google.com/file/d/..."
+                      value={formImage}
+                      onChange={(e) => {
+                        setFormImage(e.target.value);
+                        if (e.target.value.trim() && fileBase64) {
+                          setFileBase64(null);
+                          setFileName('');
+                          setFileMimeType('');
+                        }
+                      }}
+                      className="w-full px-3 py-1.5 text-[11px] border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-slate-950 font-medium placeholder-slate-400 text-slate-800"
+                    />
+                    <p className="text-[9px] text-slate-400 leading-relaxed mt-1 font-medium font-sans">
+                      *Tautan disimpan langsung ke tabel transaksi Anda. Sangat disarankan jika akun Spreadsheet Anda berlainan dari akun yang aktif di browser atau limit DriveApp penuh.
+                    </p>
                   </div>
                 </div>
 
