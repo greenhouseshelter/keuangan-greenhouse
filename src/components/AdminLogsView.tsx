@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getActivityLogs, clearActivityLogs, ActivityLog } from '../utils/activityLogger';
+import { getActivityLogs, clearActivityLogs, syncActivityLogsWithSheets } from '../utils/activityLogger';
+import { ActivityLog } from '../types';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   History, Search, Trash2, Printer, ChevronLeft, ChevronRight, AlertCircle, RefreshCw
@@ -7,18 +8,42 @@ import {
 
 export default function AdminLogsView() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [logFormat, setLogFormat] = useState<'xlsx' | 'pdf' | 'csv'>('xlsx');
   const itemsPerPage = 15;
 
   useEffect(() => {
+    // Show local logs immediately
     setLogs(getActivityLogs());
+    // Then trigger background sync with Sheets
+    triggerSync();
   }, []);
 
-  const handleRefresh = () => {
-    setLogs(getActivityLogs());
-    setCurrentPage(1);
+  const triggerSync = async () => {
+    setLoading(true);
+    try {
+      const synced = await syncActivityLogsWithSheets();
+      setLogs(synced);
+    } catch (err) {
+      console.warn("Kesalahan sinkronisasi otomatis log aktivitas:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const synced = await syncActivityLogsWithSheets();
+      setLogs(synced);
+      setCurrentPage(1);
+    } catch (err) {
+      console.warn("Gagal menyegarkan log aktivitas:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleClearLogs = () => {
@@ -128,10 +153,11 @@ export default function AdminLogsView() {
         <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
           <button
             onClick={handleRefresh}
-            className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-xl transition-all shadow-3xs"
-            title="Muat Ulang Log"
+            disabled={loading}
+            className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-650 rounded-xl transition-all shadow-3xs disabled:opacity-50"
+            title="Muat Ulang & Sinkronkan Log"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
           <select

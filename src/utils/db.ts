@@ -1,4 +1,4 @@
-import { Transaction, User, DatabaseConfig, Account, ProjectItem } from '../types';
+import { Transaction, User, DatabaseConfig, Account, ProjectItem, ActivityLog } from '../types';
 
 export function getDatabaseConfig(): DatabaseConfig {
   let savedConf = null;
@@ -166,32 +166,200 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   return true;
 }
 
+export function getLocalCustomUsers(): User[] {
+  try {
+    const raw = localStorage.getItem('greenhouse_custom_users');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+}
+
+export function saveLocalCustomUsers(users: User[]) {
+  try {
+    localStorage.setItem('greenhouse_custom_users', JSON.stringify(users));
+  } catch (e) {}
+}
+
+export function getDeletedUsernames(): string[] {
+  try {
+    const raw = localStorage.getItem('greenhouse_deleted_usernames');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+}
+
+export function saveDeletedUsernames(usernames: string[]) {
+  try {
+    localStorage.setItem('greenhouse_deleted_usernames', JSON.stringify(usernames));
+  } catch (e) {}
+}
+
+function getLocalUsersWithDefaults(): User[] {
+  const defaults: User[] = [
+    { role: 'Admin', username: 'admin', password: 'adminpassword123' },
+    { role: 'Pengelola', username: 'pengelola', password: 'pengelolapassword123' },
+    { role: 'Finance', username: 'finance', password: 'financepassword123' },
+    { role: 'Accounting', username: 'accounting', password: 'accountingpassword123' },
+  ];
+  
+  const custom = getLocalCustomUsers();
+  const deleted = getDeletedUsernames();
+  
+  // Combine defaults and custom
+  const merged = [...defaults];
+  custom.forEach(lc => {
+    const idx = merged.findIndex(m => m.username.toLowerCase() === lc.username.toLowerCase());
+    if (idx >= 0) {
+      merged[idx] = lc;
+    } else {
+      merged.push(lc);
+    }
+  });
+
+  // Filter out any that were deleted
+  return merged.filter(u => !deleted.includes(u.username.toLowerCase()));
+}
+
 export async function getUsers(): Promise<User[]> {
   const config = getDatabaseConfig();
   const url = `${config.sheetsApiUrl}?action=getUsers`;
-  const res = await fetchWithTimeout(url, { method: 'GET' });
-  if (!res.ok) throw new Error('Database Offline / Gagal mengambil akun pengguna.');
-  
-  const responseJson = await res.json();
-  if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
-    return responseJson.data;
+  const deleted = getDeletedUsernames();
+
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (res.ok) {
+      const responseJson = await res.json();
+      if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
+        const fetched: User[] = responseJson.data;
+        const localCustom = getLocalCustomUsers();
+        
+        const merged = [...fetched];
+        localCustom.forEach(lc => {
+          const idx = merged.findIndex(m => m.username.toLowerCase() === lc.username.toLowerCase());
+          if (idx >= 0) {
+            merged[idx] = lc;
+          } else {
+            merged.push(lc);
+          }
+        });
+
+        // Filter deleted ones
+        return merged.filter(u => !deleted.includes(u.username.toLowerCase()));
+      }
+    }
+  } catch (err) {
+    console.warn("getUsers from sheets failed, loading local fallback:", err);
   }
-  throw new Error(responseJson.message || 'Format data pengguna tidak valid.');
+
+  return getLocalUsersWithDefaults();
 }
 
-export async function updateUser(updatedUser: User): Promise<boolean> {
+export async function addUser(user: User): Promise<boolean> {
   const config = getDatabaseConfig();
-  const res = await fetchWithTimeout(config.sheetsApiUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'updateUser',
-      role: updatedUser.role,
-      username: updatedUser.username,
-      password: updatedUser.password
-    }),
-  });
-  if (!res.ok) throw new Error('Gagal memperbarui password akun di Google Sheets.');
+  
+  // Try calling Sheets
+  try {
+    await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addUser',
+        role: user.role,
+        username: user.username,
+        password: user.password
+      }),
+    });
+  } catch (err) {
+    console.warn("Failed sending addUser to Google Sheets, using local sync:", err);
+  }
+
+  // Remove from deleted list if it was deleted previously
+  let deleted = getDeletedUsernames();
+  if (deleted.includes(user.username.toLowerCase())) {
+    deleted = deleted.filter(name => name !== user.username.toLowerCase());
+    saveDeletedUsernames(deleted);
+  }
+
+  // Save to local custom persistence
+  const localCustom = getLocalCustomUsers();
+  const idx = localCustom.findIndex(u => u.username.toLowerCase() === user.username.toLowerCase());
+  if (idx >= 0) {
+    localCustom[idx] = user;
+  } else {
+    localCustom.push(user);
+  }
+  saveLocalCustomUsers(localCustom);
+  return true;
+}
+
+export async function updateUser(updatedUser: User, oldUsername?: string): Promise<boolean> {
+  const config = getDatabaseConfig();
+  const targetUsername = oldUsername || updatedUser.username;
+
+  try {
+    await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateUser',
+        role: updatedUser.role,
+        username: updatedUser.username,
+        password: updatedUser.password,
+        oldUsername: targetUsername
+      }),
+    });
+  } catch (err) {
+    console.warn("Failed sending updateUser to Google Sheets, using local sync:", err);
+  }
+
+  // If oldUsername changed, we delete old one and update local lists
+  if (oldUsername && oldUsername.toLowerCase() !== updatedUser.username.toLowerCase()) {
+    let deleted = getDeletedUsernames();
+    if (!deleted.includes(oldUsername.toLowerCase())) {
+      deleted.push(oldUsername.toLowerCase());
+      saveDeletedUsernames(deleted);
+    }
+  }
+
+  // Sync to local custom persistence
+  let localCustom = getLocalCustomUsers();
+  const idx = localCustom.findIndex(u => u.username.toLowerCase() === targetUsername.toLowerCase());
+  if (idx >= 0) {
+    localCustom[idx] = updatedUser;
+  } else {
+    localCustom.push(updatedUser);
+  }
+  saveLocalCustomUsers(localCustom);
+  return true;
+}
+
+export async function deleteUser(username: string): Promise<boolean> {
+  const config = getDatabaseConfig();
+  
+  try {
+    await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deleteUser',
+        username: username
+      }),
+    });
+  } catch (err) {
+    console.warn("Failed sending deleteUser to Google Sheets, using local sync:", err);
+  }
+
+  // Add to deleted folder so default list does not pull it back in
+  let deleted = getDeletedUsernames();
+  if (!deleted.includes(username.toLowerCase())) {
+    deleted.push(username.toLowerCase());
+    saveDeletedUsernames(deleted);
+  }
+
+  // Remove from custom users
+  let localCustom = getLocalCustomUsers();
+  localCustom = localCustom.filter(u => u.username.toLowerCase() !== username.toLowerCase());
+  saveLocalCustomUsers(localCustom);
   return true;
 }
 
@@ -347,3 +515,52 @@ export async function uploadFileToDrive(filename: string, mimeType: string, base
   }
   throw new Error(resJson.message || 'Tanggapan unggah file Google Drive tidak dikenal.');
 }
+
+export async function getActivityLogsFromSheets(): Promise<ActivityLog[]> {
+  const config = getDatabaseConfig();
+  const url = `${config.sheetsApiUrl}?action=getActivityLogs`;
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (!res.ok) return [];
+    const responseJson = await res.json();
+    if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
+      return responseJson.data.map((log: any) => ({
+        ...log,
+        id: log.id || `log-${Math.floor(Date.now() + Math.random() * 1000)}`,
+        timestamp: log.timestamp || new Date().toISOString()
+      }));
+    }
+  } catch (err) {
+    console.warn("Gagal mengambil log aktivitas dari Google Sheets:", err);
+  }
+  return [];
+}
+
+export async function addActivityLogToSheets(log: ActivityLog): Promise<boolean> {
+  const config = getDatabaseConfig();
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'addActivityLog', log })
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("Gagal mengirim log aktivitas ke Google Sheets:", err);
+    return false;
+  }
+}
+
+export async function clearActivityLogsOnSheets(): Promise<boolean> {
+  const config = getDatabaseConfig();
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'clearActivityLogs' })
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("Gagal menghapus log aktivitas di Google Sheets:", err);
+    return false;
+  }
+}
+

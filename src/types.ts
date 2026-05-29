@@ -43,3 +43,13 @@ export interface DatabaseConfig {
   webAppUrl: string;    // Modern Web App script URL
   spreadsheetId: string; // Google Sheets Spreadsheet ID
 }
+
+export interface ActivityLog {
+  id: string;
+  timestamp: string; // ISO Date-time
+  username: string;
+  role: string;
+  action: string;
+  details: string;
+}
+
