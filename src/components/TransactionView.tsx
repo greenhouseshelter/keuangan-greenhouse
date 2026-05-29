@@ -962,61 +962,19 @@ export default function TransactionView({
               {/* Scrollable Form Area */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {formError && (
-                  <div className="space-y-3">
-                    <div className="p-3.5 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex items-start gap-2.5">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                      <div className="min-w-0 space-y-1">
-                        <span className="font-bold block">Otorisasi Gagal / Error:</span>
-                        <p className="font-medium leading-relaxed break-words text-slate-700">{formError}</p>
-                      </div>
+                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span className="font-semibold">{formError}</span>
                     </div>
-
                     {drivePermissionError && (
-                      <div className="p-4 bg-slate-900 border border-slate-850 rounded-2xl text-slate-350 text-[11px] space-y-3 animate-fadeIn">
-                        <div className="flex items-center gap-2 text-amber-400 font-bold tracking-wide uppercase font-display border-b border-slate-800 pb-2">
-                          <KeyRound className="w-4 h-4 text-amber-500" />
-                          <span>Cara Mengaktifkan Pengunggahan Gambar</span>
-                        </div>
-                        <p className="leading-relaxed font-semibold text-slate-200">
-                          Sistem kami telah dikonfigurasi untuk menyimpan gambar langsung ke folder Google Drive Anda yang baru (<code className="text-emerald-400 font-mono bg-slate-950 px-1.5 py-0.5 rounded">1HEWsIzHlFpgDs2L2UwAEPLPRU5viABwg</code>). Namun, Anda harus memberikan otorisasi kepada Apps Script sekali saja agar memiliki izin memanggil fungsi <code className="text-emerald-405 font-mono bg-slate-950 px-1 py-0.5 rounded">DriveApp</code>.
-                        </p>
-                        <p className="font-semibold text-amber-300">
-                          Silakan ikuti langkah mudah ini untuk mengaktifkan izin:
-                        </p>
-                        <ol className="list-decimal pl-4.5 space-y-2 font-medium leading-normal text-slate-300">
-                          <li>Buka tab <b>Google Sheets</b> tempat database Anda berada.</li>
-                          <li>Klik menu <b>Ekstensi (Extensions)</b> &rarr; pilih <b>Apps Script</b>.</li>
-                          <li>Pada dropdown pilihan fungsi di atas editor (di sebelah tombol Run), pilih fungsi <b><code className="text-emerald-300 font-mono bg-slate-950 px-1.5 py-0.5 rounded">initSheetsIfNeeded</code></b> atau fungsi apa pun.</li>
-                          <li>Klik tombol <b>▷ Run (Jalankan)</b> di sebelah kirinya.</li>
-                          <li>Akan muncul kotak dialog <b>Otorisasi Diperlukan</b>. Klik <b>Tinjau Izin (Review Permissions)</b>.</li>
-                          <li>Pilih Akun Gmail Anda, lalu klik tulisan kecil <b>Lanjutan / Advanced</b> di bagian kiri bawah, kemudian pilih <b>Buka Project ... (tidak aman) / Go to ... (unsafe)</b>.</li>
-                          <li>Klik tombol biru <b>Izinkan (Allow)</b>.</li>
-                        </ol>
-                        <p className="text-[10px] text-slate-400 leading-normal border-t border-slate-800 pt-2 font-semibold">
-                          💡 Setelah izin diberikan sekali, pengunggahan struk nota kuitansi langsung ke Folder Drive bersama Anda akan berjalan lancar selamanya!
-                        </p>
-                        
-                        <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/60">
-                          <button
-                            type="button"
-                            onClick={handleForceSaveWithoutImage}
-                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-white rounded-xl text-xs flex justify-center items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-98"
-                          >
-                            <Check className="w-4 h-4" />
-                            Bypass & Simpan Transaksi Tanpa Gambar Saat Ini
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormError('');
-                              setDrivePermissionError(false);
-                            }}
-                            className="w-full py-2 bg-slate-950 hover:bg-slate-850 text-slate-400 font-bold rounded-xl text-xs flex justify-center items-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            Tutup Panduan Otorisasi
-                          </button>
-                        </div>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleForceSaveWithoutImage}
+                        className="mt-1 self-start px-3 py-1.5 bg-rose-600 hover:bg-rose-750 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                      >
+                        Bypass & Simpan Tanpa Gambar
+                      </button>
                     )}
                   </div>
                 )}
