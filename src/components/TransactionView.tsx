@@ -1015,14 +1015,22 @@ export default function TransactionView({
                   <div className="relative">
                     <span className="absolute inset-y-0 left-3 flex items-center font-bold text-slate-400">Rp</span>
                     <input 
-                      type="number" 
-                      placeholder="Masukkan nominal angka saja..." 
-                      value={formAmount}
-                      onChange={(e) => setFormAmount(e.target.value !== '' ? Number(e.target.value) : '')}
+                      type="text" 
+                      placeholder="Masukkan nominal angka (cth: 15.000.000)..." 
+                      value={formAmount !== '' ? formAmount.toLocaleString('id-ID') : ''}
+                      onChange={(e) => {
+                        const cleanStr = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                        setFormAmount(cleanStr !== '' ? parseInt(cleanStr, 10) : '');
+                      }}
                       required
                       className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white font-mono font-bold"
                     />
                   </div>
+                  {formAmount !== '' && (
+                    <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
+                      Terbilang: Rp {formAmount.toLocaleString('id-ID')}
+                    </span>
+                  )}
                 </div>
 
                 {/* Description */}
