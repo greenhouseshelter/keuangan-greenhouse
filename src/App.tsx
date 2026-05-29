@@ -18,8 +18,306 @@ import AdminLogsView from './components/AdminLogsView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff
+  Eye, EyeOff, Copy, Check, ChevronDown, ChevronUp, ExternalLink, AlertTriangle
 } from 'lucide-react';
+
+const GOOGLE_APPS_SCRIPT_CODE = `// GOOGLE APPS SCRIPT DATABASE CONNECTOR (Code.gs)
+// Salin seluruh skrip ini dan tempelkan di Extensions -> Apps Script dalam Google Sheet Anda
+
+function doGet(e) {
+  try {
+    var action = e.parameter.action;
+    var ssId = e.parameter.spreadsheetId || e.parameter.sheetId;
+    var ss = ssId ? SpreadsheetApp.openById(ssId) : SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (action === 'getTransactions') {
+      return jsonResponse({ status: 'success', data: readSheetData(ss, 'Transactions') });
+    } else if (action === 'getUsers') {
+      var users = readSheetData(ss, 'Users');
+      if (users.length === 0) {
+        // Inisialisasi default akun jika kosong
+        users = [
+          { role: 'Admin', username: 'admin', password: 'adminpassword123' },
+          { role: 'Pengelola', username: 'pengelola', password: 'pengelolapassword123' },
+          { role: 'Finance', username: 'finance', password: 'financepassword123' },
+          { role: 'Accounting', username: 'accounting', password: 'accountingpassword123' }
+        ];
+        writeSheetData(ss, 'Users', users);
+      }
+      return jsonResponse({ status: 'success', data: users });
+    } else if (action === 'getAccounts') {
+      var accounts = readSheetData(ss, 'Accounts');
+      if (accounts.length === 0) {
+        accounts = [
+          { id: 'acc_1', name: 'Penjualan Melon', type: 'Project' },
+          { id: 'acc_2', name: 'Penjualan Cabe', type: 'Project' },
+          { id: 'acc_3', name: 'Penjualan Siraman Alat', type: 'Project' },
+          { id: 'acc_4', name: 'Kas Kecil Kebun', type: 'All' },
+          { id: 'acc_5', name: 'Kas Besar', type: 'All' }
+        ];
+        writeSheetData(ss, 'Accounts', accounts);
+      }
+      return jsonResponse({ status: 'success', data: accounts });
+    } else if (action === 'getProjects') {
+      var projects = readSheetData(ss, 'Projects');
+      if (projects.length === 0) {
+        projects = [
+          { id: 'proj_melon', name: 'Melon' },
+          { id: 'proj_cabe', name: 'Cabe' },
+          { id: 'proj_perikanan', name: 'Perikanan' },
+          { id: 'proj_ternak', name: 'Ternak' }
+        ];
+        writeSheetData(ss, 'Projects', projects);
+      }
+      return jsonResponse({ status: 'success', data: projects });
+    } else if (action === 'getSettings') {
+      return jsonResponse({ status: 'success', data: readSheetData(ss, 'Settings') });
+    } else if (action === 'getActivityLogs') {
+      return jsonResponse({ status: 'success', data: readSheetData(ss, 'ActivityLogs') });
+    }
+    
+    return jsonResponse({ status: 'error', message: 'Action not found: ' + action });
+  } catch (err) {
+    return jsonResponse({ status: 'error', message: err.toString() });
+  }
+}
+
+function doPost(e) {
+  try {
+    var postData = JSON.parse(e.postData.contents);
+    var action = postData.action;
+    var ssId = postData.spreadsheetId || postData.sheetId;
+    var ss = ssId ? SpreadsheetApp.openById(ssId) : SpreadsheetApp.getActiveSpreadsheet();
+    
+    if (action === 'addTransaction') {
+      appendRowData(ss, 'Transactions', postData.transaction);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'updateTransaction') {
+      updateRowData(ss, 'Transactions', 'id', postData.transaction.id, postData.transaction);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'deleteTransaction') {
+      deleteRowData(ss, 'Transactions', 'id', postData.id);
+      return jsonResponse({ status: 'success' });
+    }
+    
+    else if (action === 'addUser') {
+      appendRowData(ss, 'Users', postData.user);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'updateUser') {
+      updateRowData(ss, 'Users', 'username', postData.user.username, postData.user);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'deleteUser') {
+      deleteRowData(ss, 'Users', 'username', postData.username);
+      return jsonResponse({ status: 'success' });
+    }
+    
+    else if (action === 'addAccount') {
+      appendRowData(ss, 'Accounts', postData.account);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'updateAccount') {
+      updateRowData(ss, 'Accounts', 'id', postData.account.id, postData.account);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'deleteAccount') {
+      deleteRowData(ss, 'Accounts', 'id', postData.id);
+      return jsonResponse({ status: 'success' });
+    }
+    
+    else if (action === 'addProject') {
+      appendRowData(ss, 'Projects', postData.project);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'updateProject') {
+      updateRowData(ss, 'Projects', 'id', postData.project.id, postData.project);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'deleteProject') {
+      deleteRowData(ss, 'Projects', 'id', postData.id);
+      return jsonResponse({ status: 'success' });
+    }
+    
+    else if (action === 'updateSettings') {
+      var item = { key: postData.key, value: JSON.stringify(postData.value) };
+      updateRowData(ss, 'Settings', 'key', postData.key, item, true);
+      return jsonResponse({ status: 'success' });
+    }
+    
+    else if (action === 'addActivityLog') {
+      appendRowData(ss, 'ActivityLogs', postData.log);
+      return jsonResponse({ status: 'success' });
+    } else if (action === 'clearActivityLogs') {
+      clearSheet(ss, 'ActivityLogs');
+      return jsonResponse({ status: 'success' });
+    }
+    
+    return jsonResponse({ status: 'error', message: 'Unknown post action: ' + action });
+  } catch (err) {
+    return jsonResponse({ status: 'error', message: err.toString() });
+  }
+}
+
+// Fungsi Bantu Global
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getOrAddSheet(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  return sheet;
+}
+
+function readSheetData(ss, name) {
+  var sheet = getOrAddSheet(ss, name);
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return [];
+  
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var values = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  
+  var data = [];
+  for (var r = 0; r < values.length; r++) {
+    var obj = {};
+    var empty = true;
+    for (var c = 0; c < headers.length; c++) {
+      if (headers[c]) {
+        var cellVal = values[r][c];
+        if (cellVal instanceof Date) {
+          cellVal = cellVal.toISOString();
+        }
+        obj[headers[c]] = cellVal;
+        if (cellVal !== '') empty = false;
+      }
+    }
+    if (!empty) data.push(obj);
+  }
+  return data;
+}
+
+function writeSheetData(ss, name, arrayList) {
+  var sheet = getOrAddSheet(ss, name);
+  sheet.clear();
+  if (arrayList.length === 0) return;
+  
+  var headers = Object.keys(arrayList[0]);
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  
+  var matrix = [];
+  for (var i = 0; i < arrayList.length; i++) {
+    var row = [];
+    for (var j = 0; j < headers.length; j++) {
+      var val = arrayList[i][headers[j]];
+      row.push(val === undefined || val === null ? '' : val);
+    }
+    matrix.push(row);
+  }
+  sheet.getRange(2, 1, matrix.length, headers.length).setValues(matrix);
+}
+
+function appendRowData(ss, name, obj) {
+  var sheet = getOrAddSheet(ss, name);
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  
+  var headers = [];
+  if (lastRow === 0 || lastCol === 0) {
+    headers = Object.keys(obj);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else {
+    headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    var objKeys = Object.keys(obj);
+    var added = false;
+    for (var i = 0; i < objKeys.length; i++) {
+      if (headers.indexOf(objKeys[i]) === -1) {
+        headers.push(objKeys[i]);
+        added = true;
+      }
+    }
+    if (added) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    }
+  }
+  
+  var row = [];
+  for (var j = 0; j < headers.length; j++) {
+    var val = obj[headers[j]];
+    row.push(val === undefined || val === null ? '' : val);
+  }
+  sheet.appendRow(row);
+}
+
+function updateRowData(ss, name, keyName, keyValue, obj, insertIfNotFound) {
+  var sheet = getOrAddSheet(ss, name);
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) {
+    if (insertIfNotFound) appendRowData(ss, name, obj);
+    return;
+  }
+  
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var colIdx = headers.indexOf(keyName);
+  if (colIdx === -1) {
+    if (insertIfNotFound) appendRowData(ss, name, obj);
+    return;
+  }
+  
+  var values = sheet.getRange(2, colIdx + 1, lastRow - 1, 1).getValues();
+  var foundRowIdx = -1;
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][0]).toLowerCase() === String(keyValue).toLowerCase()) {
+      foundRowIdx = i + 2;
+      break;
+    }
+  }
+  
+  if (foundRowIdx !== -1) {
+    for (var key in obj) {
+      var cIdx = headers.indexOf(key);
+      if (cIdx !== -1) {
+        var cellVal = obj[key];
+        sheet.getRange(foundRowIdx, cIdx + 1).setValue(cellVal === undefined || cellVal === null ? '' : cellVal);
+      } else {
+        headers.push(key);
+        sheet.getRange(1, headers.length).setValue(key);
+        sheet.getRange(foundRowIdx, headers.length).setValue(obj[key] === undefined || obj[key] === null ? '' : obj[key]);
+      }
+    }
+  } else if (insertIfNotFound) {
+    appendRowData(ss, name, obj);
+  }
+}
+
+function deleteRowData(ss, name, keyName, keyValue) {
+  var sheet = getOrAddSheet(ss, name);
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return;
+  
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var colIdx = headers.indexOf(keyName);
+  if (colIdx === -1) return;
+  
+  var values = sheet.getRange(2, colIdx + 1, lastRow - 1, 1).getValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0]).toLowerCase() === String(keyValue).toLowerCase()) {
+      sheet.deleteRow(i + 2);
+    }
+  }
+}
+
+function clearSheet(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (sheet) {
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow > 1 && lastCol > 0) {
+      sheet.getRange(2, 1, lastRow - 1, lastCol).clear();
+    }
+  }
+}
+`;
 
 export default function App() {
   // Auth state
@@ -29,6 +327,8 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [usersList, setUsersList] = useState<User[]>([]);
   const [loginError, setLoginError] = useState('');
+  const [showScriptGuide, setShowScriptGuide] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // App data state
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -80,21 +380,53 @@ export default function App() {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 12000); // 12s timeout for stability
       
-      const response = await fetch(`/api/sheets-proxy?action=getSettings&_t=${Date.now()}`, {
+      const response = await fetch('/api/sheets-proxy?action=getSettings&_t=' + Date.now(), {
         method: 'GET',
         signal: controller.signal
       });
       clearTimeout(id);
       
       if (!response.ok) {
+        try {
+          const errJson = await response.json();
+          if (errJson && errJson.status === 'error') {
+            if (errJson.html) {
+              const htmlStr = errJson.html;
+              if (htmlStr.includes('Script function not found') || htmlStr.includes('doGet')) {
+                setConnectionError('warning');
+                setConnectionDebugInfo('Fungsi doGet tidak ditemukan di Google Apps Script Anda. Pastikan kode Apps Script telah diletakkan dan dipublikasikan dengan benar.');
+              } else if (htmlStr.includes('shortcut icon') || htmlStr.includes('docs/script') || htmlStr.includes('SpreadsheetApp')) {
+                setConnectionError('warning');
+                setConnectionDebugInfo('Akun Google tidak diizinkan mengakses Spreadsheet, atau ID Spreadsheet atau URL Web App salah.');
+              } else {
+                setConnectionError('warning');
+                const match = htmlStr.match(/<title>([\s\S]*?)<\/title>/i);
+                const titleStr = match ? match[1].trim() : '';
+                setConnectionDebugInfo(`Google Apps Script mengembalikan halaman HTML Error: "${titleStr || 'Kesalahan Server Google'}" (Masalah otorisasi atau Spreadsheet ID tidak sesuai).`);
+              }
+            } else {
+              setConnectionError('offline_or_failed');
+              setConnectionDebugInfo(errJson.message || 'Error yang dikembalikan dari penyedia data tidak dikenal.');
+            }
+            return false;
+          }
+        } catch (je) {
+          // ignore parsing error
+        }
         setConnectionDebugInfo(`Server returned HTTP ${response.status}: ${response.statusText}`);
         return false;
       }
       
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('text/html')) {
-        setConnectionError('cookie_blocked');
-        setConnectionDebugInfo(`Expected JSON response, but received HTML data. This typically indicates that background cookies/session authorization are blocked or intercepted by a gateway.`);
+        const text = await response.text();
+        if (text.includes('Script function not found') || text.includes('doGet') || text.includes('Error')) {
+          setConnectionError('warning');
+          setConnectionDebugInfo('Script function not found: doGet');
+        } else {
+          setConnectionError('cookie_blocked');
+          setConnectionDebugInfo(`Expected JSON response, but received HTML data. This typically indicates that background cookies/session authorization are blocked or intercepted by a gateway.`);
+        }
         return false;
       }
 
@@ -118,19 +450,28 @@ export default function App() {
     setConnectionDebugInfo('');
     setAppLoading(true);
     
+    // First run connection check to verify if remote spreadsheet is successfully accessible
+    const isSuccess = await testGoogleSheetsConnection();
+    
+    if (!isSuccess) {
+      setConnectionStatus('offline');
+      setAppLoading(false);
+      return;
+    }
+    
     // Fetch data directly from Google Sheets using our secure direct backend connection
     try {
       const txs = await getTransactions();
       const users = await getUsers();
       setTransactions(txs);
       setUsersList(users);
+      
       setConnectionStatus('online');
       setConnectionError('');
     } catch (err: any) {
       console.error('Error fetching data directly from Google Sheets:', err);
-      // Fail gracefully: don't block. Set status to online but keep a console/warning.
-      setConnectionStatus('online');
-      setConnectionError('warning');
+      setConnectionStatus('offline');
+      setConnectionError('offline_or_failed');
       setConnectionDebugInfo(err.message || String(err));
     }
     
@@ -270,10 +611,24 @@ export default function App() {
             <p className="text-xs text-slate-400 font-medium mt-1">Portal Pencatatan Keuangan</p>
             
             {/* Google Sheets Connection Status Badge */}
-            <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-100 text-[10px] bg-emerald-50 text-emerald-700 font-extrabold tracking-wide uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Sistem Cloud Terhubung</span>
-            </div>
+            {connectionStatus === 'checking' && (
+              <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-blue-100 text-[10px] bg-blue-50 text-blue-700 font-extrabold tracking-wide uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <span>Memeriksa Sinkronisasi Cloud...</span>
+              </div>
+            )}
+            {connectionStatus === 'online' && connectionError === '' && (
+              <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-100 text-[10px] bg-emerald-50 text-emerald-700 font-extrabold tracking-wide uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Sistem Cloud Terhubung</span>
+              </div>
+            )}
+            {(connectionStatus === 'offline' || connectionError !== '') && (
+              <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-rose-100 text-[10px] bg-rose-50 text-rose-700 font-extrabold tracking-wide uppercase max-w-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                <span className="truncate">Sistem Terputus / Periksa Konfigurasi</span>
+              </div>
+            )}
           </div>
 
           {/* Form */}
@@ -284,6 +639,21 @@ export default function App() {
               <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex items-center gap-2">
                 <Shield className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>{loginError}</span>
+              </div>
+            )}
+
+            {connectionStatus === 'offline' && connectionDebugInfo && (
+              <div className="p-3.5 bg-rose-50/60 border border-rose-100 text-rose-800 rounded-2xl text-[11px] leading-relaxed">
+                <div className="font-bold text-rose-900 mb-1 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span>Detail Diagnosis Masalah:</span>
+                </div>
+                <div className="font-mono text-[10px] bg-rose-100/50 p-2 rounded-xl border border-rose-150 break-words select-all whitespace-pre-wrap leading-normal text-rose-950 font-bold max-h-32 overflow-y-auto">
+                  {connectionDebugInfo}
+                </div>
+                <p className="mt-1.5 text-[10.5px] text-rose-700">
+                  Sistem tidak dapat memuat data transaksi. Hubungi admin atau ikuti petunjuk <strong>Panduan Konfigurasi Google Sheets</strong> di bawah untuk mengaktifkan izin Web App Anda.
+                </p>
               </div>
             )}
 
@@ -335,7 +705,96 @@ export default function App() {
             </form>
           </div>
 
+          {/* Collapsible Instruksi Google Sheets Code.gs */}
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden text-xs">
+            <button
+              onClick={() => setShowScriptGuide(!showScriptGuide)}
+              className="w-full px-5 py-4 flex items-center justify-between font-bold text-slate-700 bg-slate-50 border-b border-slate-100 font-display transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Panduan Konfigurasi Google Sheets</span>
+              </div>
+              {showScriptGuide ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            </button>
+            {showScriptGuide && (
+              <div className="p-5 space-y-4 text-slate-650 leading-relaxed font-medium">
+                <p>
+                  Aplikasi ini terhubung ke Spreadsheet Anda melalui skrip perantara (Google Apps Script) agar seluruh transaksi real-time dapat tersimpan dengan aman.
+                </p>
+                <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-1">
+                  <div className="font-bold text-blue-850 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                    <AlertTriangle className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Prasyarat File Spreadsheet</span>
+                  </div>
+                  <p className="text-[11px] text-blue-700">
+                    Pastikan spreadsheet ID Anda dikonfigurasikan dengan benar di backend Anda dengan ID: <code className="bg-blue-150 px-1.5 py-0.5 rounded font-mono select-all font-bold text-blue-900">1Fhsctw6wrJ9ZuZpDz5SHIXcl08PoLi6HB5pNngMNozc</code>
+                  </p>
+                </div>
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px] mt-2">Langkah Pemasangan Skrip:</h4>
+                <ol className="list-decimal pl-4.5 space-y-2.5 font-medium text-slate-650">
+                  <li>
+                    Buka Google Sheet Anda di alamat URL berikut:{' '}
+                    <a
+                      href="https://docs.google.com/spreadsheets/d/1Fhsctw6wrJ9ZuZpDz5SHIXcl08PoLi6HB5pNngMNozc/edit?gid=2062253581#gid=2062253581"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-600 hover:underline inline-flex items-center gap-0.5 font-semibold"
+                    >
+                      Buka Spreadsheet <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </li>
+                  <li>Di menu navigasi atas Sheet, pilih <strong>Extensions (Ekstensi)</strong> &gt; <strong>Apps Script</strong>.</li>
+                  <li>Hapus semua kode bawaan yang ada di editor skrip tersebut.</li>
+                  <li>
+                    Salin script perantara <strong className="text-emerald-700 font-bold">Code.gs</strong> lengkap di bawah ini menggunakan tombol salin, lalu tempelkan (paste) ke editor Apps Script Anda.
+                  </li>
+                  <li>Klik tombol <strong className="text-blue-700 font-bold">Deploy (Terapkan)</strong> &gt; <strong className="text-blue-700 font-bold">New deployment (Penerapan baru)</strong> di bagian kanan atas layar script Google.</li>
+                  <li>Klik roda gigi jenis penerapan di samping &quot;Select type&quot; dan pilih <strong className="text-slate-800 font-bold">Web app (Aplikasi web)</strong>.</li>
+                  <li>Atur konfigurasi wajib berikut:
+                    <ul className="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-slate-550">
+                      <li><strong>Execute as (Jalankan sebagai):</strong> Pilih <strong className="text-slate-800 font-semibold">&quot;Me&quot; (Saya / Email Anda)</strong></li>
+                      <li><strong>Who has access (Mengakses):</strong> Pilih <strong className="text-rose-750 font-bold">&quot;Anyone&quot; (Siapa saja / Umum)</strong> - <span className="italic">Ini mutlak agar peladen dapat saling terhubung</span></li>
+                    </ul>
+                  </li>
+                  <li>Klik tombol <strong>Deploy (Terapkan)</strong>, selesaikan permintaan izin keamanan akun Google Anda (Authorize Access).</li>
+                  <li>Salin alamat <strong>Web App URL</strong> yang dihasilkan (biasanya berakhiran `/exec`) dan pastikan tautan itu sudah dimasukkan di peladen Anda.</li>
+                </ol>
 
+                <div className="space-y-1.5 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 text-[10px] uppercase tracking-wider">SKRIP KODE (Code.gs)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className={`px-3 py-1.5 flex items-center gap-1.5 hover:bg-slate-100 border border-slate-200 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                        copied ? 'text-emerald-600 bg-emerald-50 border-emerald-100' : 'text-slate-650 bg-white'
+                      }`}
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copied ? 'Tersalin!' : 'Salin Skrip'}</span>
+                    </button>
+                  </div>
+                  <pre className="p-3.5 bg-slate-950 text-slate-300 rounded-2xl overflow-x-auto text-[10px] font-mono leading-relaxed max-h-48 scrollbar-thin">
+                    {GOOGLE_APPS_SCRIPT_CODE}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Online only connection alert */}
+          <div className="bg-blue-50 p-4 border border-blue-100 rounded-3xl text-[11px] text-blue-800 leading-relaxed flex gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold block mb-0.5 text-blue-900">📢 Sistem Cloud Online Only:</span>
+              Seluruh data dimuat secara langsung dan real-time dari Google Sheets Anda secara online tanpa penyimpanan lokal demi keamanan dan integritas data pencatatan kebun.
+            </div>
+          </div>
 
         </div>
       </div>

@@ -13,11 +13,7 @@ const PORT = 3000;
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
-app.use('/uploads', express.static(UPLOADS_DIR));
+// No static uploads folder needed for purely online operation
 
 // Prevent HTTP caching of API requests to make sure separate tabs get active, up-to-date online/offline status
 app.use('/api', (req, res, next) => {
@@ -27,19 +23,32 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Extract spreadsheet ID from url if full spreadsheet link is provided
+function extractSpreadsheetId(input: string): string {
+  if (!input) return '';
+  const trimmed = input.trim();
+  if (trimmed.startsWith('http') || trimmed.includes('/spreadsheets/')) {
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  return trimmed;
+}
+
 const CONFIG_FILE = path.join(process.cwd(), 'backend_config.json');
 
 // Get configuration securely stored in backend
 function getBackendConfig() {
   let webAppUrl = '';
-  let spreadsheetId = '';
+  let spreadsheetIdRaw = '';
 
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const content = fs.readFileSync(CONFIG_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       webAppUrl = parsed.webAppUrl || '';
-      spreadsheetId = parsed.spreadsheetId || '';
+      spreadsheetIdRaw = parsed.spreadsheetId || '';
     }
   } catch (err) {
     console.error('Error reading backend config file:', err);
@@ -49,10 +58,11 @@ function getBackendConfig() {
   if (!webAppUrl) {
     webAppUrl = process.env.VITE_SHEETS_API_URL || process.env.SHEETS_API_URL || '';
   }
-  if (!spreadsheetId) {
-    spreadsheetId = process.env.VITE_SPREADSHEET_ID || process.env.SPREADSHEET_ID || '';
+  if (!spreadsheetIdRaw) {
+    spreadsheetIdRaw = process.env.VITE_SPREADSHEET_ID || process.env.SPREADSHEET_ID || '';
   }
 
+  const spreadsheetId = extractSpreadsheetId(spreadsheetIdRaw);
   return { webAppUrl, spreadsheetId };
 }
 
@@ -90,35 +100,7 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.post('/api/upload', (req, res) => {
-  try {
-    const { filename, mimeType, base64Data } = req.body;
-    if (!filename || !base64Data) {
-      return res.status(400).json({ status: 'error', message: 'Filename and base64Data are required.' });
-    }
-
-    const base64Str = base64Data.replace(/^data:image\/\w+;base64,/, "");
-    const buffer = Buffer.from(base64Str, 'base64');
-
-    const ext = path.extname(filename) || '.jpg';
-    const baseName = path.basename(filename, ext).replace(/[^a-zA-Z0-9]/g, '_');
-    const safeFilename = `${baseName}_${Date.now()}${ext}`;
-    const filePath = path.join(UPLOADS_DIR, safeFilename);
-
-    fs.writeFileSync(filePath, buffer);
-
-    const fileUrl = `/uploads/${safeFilename}`;
-    return res.json({
-      status: 'success',
-      data: {
-        url: fileUrl
-      }
-    });
-  } catch (error: any) {
-    console.error('File upload error:', error);
-    return res.status(500).json({ status: 'error', message: error.message || 'Gagal menyimpan bukti transaksi ke server.' });
-  }
-});
+// Removed file upload route
 
 app.all('/api/sheets-proxy', async (req, res): Promise<any> => {
   const config = getBackendConfig();
@@ -188,6 +170,15 @@ app.all('/api/sheets-proxy', async (req, res): Promise<any> => {
         const json = JSON.parse(text);
         return res.json(json);
       } catch (e) {
+        // If it looks like HTML, Google is returning an error page or authorization redirect
+        if (text.trim().startsWith('<') || text.toLowerCase().includes('<html')) {
+          return res.status(502).json({
+            status: 'error',
+            errorType: 'html_response',
+            message: 'Google Sheets Apps Script mengembalikan halaman HTML/Error. Kemungkinan ada kesalahan runtime, izin akses belum dikonfigurasi, atau Spreadsheet ID tidak valid.',
+            html: text
+          });
+        }
         return res.json({ status: 'success', data: text });
       }
     }
