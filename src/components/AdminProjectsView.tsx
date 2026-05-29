@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ProjectItem } from '../types';
 import { getProjects, addProject, updateProject, deleteProject } from '../utils/db';
+import { addActivityLog } from '../utils/activityLogger';
 import { Plus, Edit2, Trash2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, Sprout } from 'lucide-react';
 
 export default function AdminProjectsView() {
@@ -65,12 +66,14 @@ export default function AdminProjectsView() {
     try {
       if (isEditing && editingId) {
         // Update
+        const oldName = projectsList.find(p => p.id === editingId)?.name || '';
         const updated: ProjectItem = {
           id: editingId,
           name: name.trim(),
         };
         const ok = await updateProject(updated);
         if (ok) {
+          addActivityLog('EDIT_PROYEK', `Mengubah nama proyek greenhouse dari "${oldName}" menjadi "${updated.name}"`);
           showNotification('success', `Proyek "${updated.name}" berhasil diperbarui.`);
           setIsEditing(false);
           setEditingId(null);
@@ -86,6 +89,7 @@ export default function AdminProjectsView() {
         };
         const ok = await addProject(newProj);
         if (ok) {
+          addActivityLog('TAMBAH_PROYEK', `Menambahkan proyek greenhouse baru "${newProj.name}"`);
           showNotification('success', `Proyek "${newProj.name}" berhasil ditambahkan.`);
           setName('');
         } else {
@@ -109,6 +113,7 @@ export default function AdminProjectsView() {
     try {
       const ok = await deleteProject(id);
       if (ok) {
+        addActivityLog('HAPUS_PROYEK', `Menghapus proyek greenhouse "${projectName}"`);
         showNotification('success', `Proyek "${projectName}" berhasil dihapus.`);
         await loadProjects();
       } else {

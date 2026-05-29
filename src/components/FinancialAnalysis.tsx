@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
+import { addActivityLog } from '../utils/activityLogger';
 import { BrainCircuit, RefreshCw, Send, AlertTriangle, Sparkles, CheckCircle, FileQuestion, Quote } from 'lucide-react';
 
 interface FinancialAnalysisProps {
@@ -41,6 +42,7 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
     }, 2500);
 
     try {
+      addActivityLog('DAPATKAN_ANALISIS_AI', 'Meminta asisten analitik Gemini AI untuk menyusun analisis keuangan cerdas berdasarkan data transaksi');
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

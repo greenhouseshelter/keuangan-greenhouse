@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Account } from '../types';
 import { getAccounts, addAccount, updateAccount, deleteAccount } from '../utils/db';
+import { addActivityLog } from '../utils/activityLogger';
 import { Plus, Edit2, Trash2, CheckCircle, AlertCircle, RefreshCw, FolderHeart, Layers } from 'lucide-react';
 
 export default function AdminAccountsView() {
@@ -75,6 +76,7 @@ export default function AdminAccountsView() {
         };
         const ok = await updateAccount(updated);
         if (ok) {
+          addActivityLog('EDIT_AKUN', `Mengubah akun keuangan "${updated.name}" (Tipe: ${updated.type})`);
           showNotification('success', `Akun "${updated.name}" berhasil diperbarui.`);
           setIsEditing(false);
           setEditingId(null);
@@ -91,6 +93,7 @@ export default function AdminAccountsView() {
         };
         const ok = await addAccount(newAcc);
         if (ok) {
+          addActivityLog('TAMBAH_AKUN', `Menambahkan akun keuangan baru "${newAcc.name}" (Tipe: ${newAcc.type})`);
           showNotification('success', `Akun "${newAcc.name}" berhasil ditambahkan.`);
           setName('');
         } else {
@@ -114,6 +117,7 @@ export default function AdminAccountsView() {
     try {
       const ok = await deleteAccount(id);
       if (ok) {
+        addActivityLog('HAPUS_AKUN', `Menghapus akun keuangan "${accountName}"`);
         showNotification('success', `Akun "${accountName}" berhasil dihapus.`);
         await loadAccounts();
       } else {

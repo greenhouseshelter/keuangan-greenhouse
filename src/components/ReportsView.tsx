@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Transaction, Project } from '../types';
 import { getProjects } from '../utils/db';
+import { addActivityLog } from '../utils/activityLogger';
 import { FileText, Printer, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, CheckCircle, ShieldCheck } from 'lucide-react';
 
 interface ReportsViewProps {
@@ -82,6 +83,7 @@ export default function ReportsView({ transactions }: ReportsViewProps) {
   };
 
   const handlePrint = () => {
+    addActivityLog('CETAK_LAPORAN', `Mencetak laporan laba rugi konsolidasi untuk periode "${getMonthNameIndo(selectedMonth)}"`);
     window.print();
   };
 
