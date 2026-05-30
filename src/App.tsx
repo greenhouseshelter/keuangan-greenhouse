@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Role, Transaction, DatabaseConfig, Project } from './types';
 import { 
   getTransactions, getUsers, addTransaction, updateTransaction, 
-  deleteTransaction, getDatabaseConfig 
+  deleteTransaction, getDatabaseConfig, fetchWithTimeout
 } from './utils/db';
 import { addActivityLog } from './utils/activityLogger';
 import Navbar from './components/Navbar';
@@ -378,7 +378,7 @@ export default function App() {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 12000); // 12s timeout for stability
       
-      const response = await fetch('/api/sheets-proxy?action=getSettings&_t=' + Date.now(), {
+      const response = await fetchWithTimeout('/api/sheets-proxy?action=getSettings&_t=' + Date.now(), {
         method: 'GET',
         signal: controller.signal
       });

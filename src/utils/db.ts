@@ -1,11 +1,25 @@
 import { Transaction, User, DatabaseConfig, Account, ProjectItem, ActivityLog } from '../types';
+import backendConfig from '../../backend_config.json';
+
+// Keep track of direct connection override
+let useDirectConnection = false;
+
+// Check if we are running on a custom client-side domain (e.g. Vercel)
+const isCustomDomain = typeof window !== 'undefined' && 
+  window.location.hostname && 
+  !window.location.hostname.includes('localhost') && 
+  !window.location.hostname.includes('127.0.0.1') && 
+  !window.location.hostname.endsWith('.run.app') && 
+  !window.location.hostname.includes('aistudio.google') && 
+  !window.location.hostname.includes('googleusercontent.com');
 
 export function getDatabaseConfig(): DatabaseConfig {
+  const isDirect = useDirectConnection || isCustomDomain;
   return {
     mode: 'sheets',
-    sheetsApiUrl: '/api/sheets-proxy',
-    webAppUrl: '/api/sheets-proxy',
-    spreadsheetId: '',
+    sheetsApiUrl: isDirect ? backendConfig.webAppUrl : '/api/sheets-proxy',
+    webAppUrl: backendConfig.webAppUrl,
+    spreadsheetId: backendConfig.spreadsheetId,
     driveFolderId: ''
   };
 }
@@ -14,14 +28,65 @@ export function saveDatabaseConfig(config: DatabaseConfig) {
   // Connection parameters are stored and handled securely on the backend only
 }
 
-export async function fetchWithTimeout(resource: string, options: any = {}, timeout = 15000) {
+export async function fetchWithTimeout(resource: string, options: any = {}, timeout = 15000): Promise<Response> {
   let targetUrl = resource;
+  const isProxyUrl = targetUrl.includes('/api/sheets-proxy');
+  const isDirectGoogleUrl = targetUrl.startsWith('https://script.google.com');
+  const isSheetsDatabaseCall = isProxyUrl || isDirectGoogleUrl;
+  const isDirect = useDirectConnection || isCustomDomain;
+
+  if (isSheetsDatabaseCall && isDirect) {
+    let finalBase = targetUrl;
+    let queryParams = new URLSearchParams();
+
+    if (isProxyUrl) {
+      let urlObj: URL;
+      if (targetUrl.startsWith('http')) {
+        urlObj = new URL(targetUrl);
+      } else {
+        urlObj = new URL(targetUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+      }
+      queryParams = new URLSearchParams(urlObj.search);
+      finalBase = backendConfig.webAppUrl;
+    } else {
+      const urlObj = new URL(targetUrl);
+      queryParams = new URLSearchParams(urlObj.search);
+      finalBase = `${urlObj.origin}${urlObj.pathname}`;
+    }
+
+    if (backendConfig.spreadsheetId) {
+      queryParams.set('spreadsheetId', backendConfig.spreadsheetId);
+      queryParams.set('sheetId', backendConfig.spreadsheetId);
+    }
+
+    const separator = finalBase.includes('?') ? '&' : '?';
+    const paramsStr = queryParams.toString();
+    targetUrl = paramsStr ? `${finalBase}${separator}${paramsStr}` : finalBase;
+    
+    options.redirect = 'follow';
+
+    if (options.method === 'POST' && options.body) {
+      try {
+        let bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        if (typeof bodyObj === 'object' && backendConfig.spreadsheetId) {
+          bodyObj = {
+            ...bodyObj,
+            spreadsheetId: backendConfig.spreadsheetId,
+            sheetId: backendConfig.spreadsheetId
+          };
+          options.body = JSON.stringify(bodyObj);
+        }
+      } catch (e) {
+        console.warn('Gagal memproses/menyuntik spreadsheetId ke POST body:', e);
+      }
+    }
+  }
 
   // Ensure relative or local-facing URLs are absolute
   if (targetUrl.startsWith('/') && !targetUrl.startsWith('//')) {
-    targetUrl = new URL(targetUrl, window.location.origin).toString();
+    targetUrl = new URL(targetUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000').toString();
   } else if (targetUrl.startsWith('//') || !targetUrl.startsWith('http')) {
-    targetUrl = new URL(targetUrl, window.location.origin).toString();
+    targetUrl = new URL(targetUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000').toString();
   }
 
   const controller = new AbortController();
@@ -34,7 +99,8 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
       headers: {
         'Content-Type': 'application/json',
         ...(options.headers || {})
-      }
+      },
+      redirect: options.redirect || 'follow'
     };
 
     if (options.body) {
@@ -47,9 +113,24 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
 
     const response = await fetch(targetUrl, fetchOptions);
     clearTimeout(id);
+
+    // Auto fallback trigger if proxy fails or returns 404/502
+    if (isSheetsDatabaseCall && !isDirect && (response.status === 404 || response.status === 502)) {
+      console.warn(`Proxy returned HTTP ${response.status}. Automatically falling back to direct Google Web App URL...`);
+      useDirectConnection = true;
+      return fetchWithTimeout(resource, options, timeout);
+    }
+
     return response;
   } catch (error) {
     clearTimeout(id);
+
+    // Network errors or offline exceptions
+    if (isSheetsDatabaseCall && !isDirect) {
+      console.warn("Proxy connection error. Automatically falling back to direct Google Web App: ", error);
+      useDirectConnection = true;
+      return fetchWithTimeout(resource, options, timeout);
+    }
     throw error;
   }
 }
