@@ -922,7 +922,7 @@ export default function App() {
           </div>
 
           <div className="p-6 border-t border-slate-100 space-y-2 text-center text-[10px] text-slate-550 italic">
-            <div>Greenhouse Financial v1.0.0</div>
+            <div>Pencatatan Keuangan Greenhouse 2026</div>
             <button 
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-1.5 py-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 mt-2 font-semibold text-[11px]"
