@@ -52,12 +52,30 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
       clearInterval(interval);
 
       if (!response.ok) {
-        const errJson = await response.json();
-        throw new Error(errJson.error || errJson.details || 'Gagal memanggil asistent analitik API.');
+        const text = await response.text();
+        let errorMessage = 'Gagal memanggil asisten analitik API.';
+        try {
+          const errJson = JSON.parse(text);
+          errorMessage = errJson.error || errJson.details || errorMessage;
+        } catch (e) {
+          if (text.includes('GEMINI_API_KEY') || text.includes('not set') || text.includes('Secrets')) {
+            errorMessage = 'API Key Gemini (GEMINI_API_KEY) belum dikonfigurasi. Silakan masuk ke panel "Settings" > "Secrets" di AI Studio, tambahkan variabel "GEMINI_API_KEY" dengan value kunci API Gemini Anda.';
+          } else {
+            errorMessage = `Terjadi kesalahan komunikasi dengan server (Status: ${response.status}). Pastikan Anda telah mengonfigurasi Secrets "GEMINI_API_KEY" di panel Settings > Secrets AI Studio.`;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const resJson = await response.json();
-      if (resJson.analysis) {
+      const text = await response.text();
+      let resJson;
+      try {
+        resJson = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Format respon analitik dari server tidak valid (bukan JSON).');
+      }
+      
+      if (resJson && resJson.analysis) {
         setAnalysis(resJson.analysis);
       } else {
         throw new Error('Format respon analitik AI kosong atau tidak sesuai.');
