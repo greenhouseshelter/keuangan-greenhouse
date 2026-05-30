@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { addActivityLog } from '../utils/activityLogger';
-import { BrainCircuit, RefreshCw, Send, AlertTriangle, Sparkles, CheckCircle, FileQuestion, Quote } from 'lucide-react';
+import { fetchWithTimeout } from '../utils/db';
+import { BrainCircuit, RefreshCw, Send, AlertTriangle, Sparkles, CheckCircle, FileQuestion, Quote, ExternalLink } from 'lucide-react';
 
 interface FinancialAnalysisProps {
   transactions: Transaction[];
@@ -43,11 +44,11 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
 
     try {
       addActivityLog('DAPATKAN_ANALISIS_AI', 'Meminta asisten analitik Gemini AI untuk menyusun analisis keuangan cerdas berdasarkan data transaksi');
-      const response = await fetch('/api/analyze', {
+      const response = await fetchWithTimeout('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactions })
-      });
+      }, 30000);
 
       clearInterval(interval);
 
@@ -178,16 +179,41 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
 
       {/* Error state */}
       {error && (
-        <div className="bg-rose-50/50 border border-rose-100 p-6 rounded-2xl space-y-3">
+        <div className="bg-rose-50/50 border border-rose-100 p-6 rounded-2xl space-y-4">
           <div className="flex items-center gap-2 text-rose-800 font-bold font-display text-sm">
             <AlertTriangle className="w-5 h-5 text-rose-600" />
             Analis AI Gagal Dibuat
           </div>
-          <p className="text-xs text-rose-700 leading-relaxed">
+          <p className="text-xs text-rose-700 leading-relaxed font-medium">
             {error}
           </p>
-          <div className="text-[10px] text-slate-500 pt-2 border-t border-rose-100 bg-white/40 p-3 rounded-lg leading-relaxed">
-            <strong>Catatan untuk Developer:</strong> Pastikan Anda telah mengonfigurasi variabel <code>GEMINI_API_KEY</code> pada panel <strong>Settings &gt; Secrets</strong> di AI Studio Anda.
+          
+          <div className="bg-white/70 p-4 rounded-xl border border-rose-100/60 space-y-3">
+            <h5 className="text-[11px] font-bold text-slate-700">Panduan Mengatasi Masalah (Troubleshooting):</h5>
+            <ol className="text-[10px] text-slate-600 space-y-1.5 list-decimal pl-4 leading-relaxed">
+              <li>
+                <strong>Verifikasi Secrets:</strong> Pastikan Anda telah membuat secret bernama <code className="bg-slate-100 px-1 py-0.5 rounded font-bold text-slate-800">GEMINI_API_KEY</code> pada panel <strong>Settings &gt; Secrets</strong> di AI Studio Anda.
+              </li>
+              <li>
+                <strong>Masalah Iframe / Browser Cookie:</strong> Jika Anda membuka aplikasi di panel preview AI Studio, browser Anda mungkin memblokir cookie keamanan sistem Sandbox.
+              </li>
+            </ol>
+            
+            <div className="pt-1 flex flex-wrap gap-2">
+              <a 
+                href="/api/debug-key" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 hover:text-indigo-800 bg-indigo-50 border border-indigo-200 hover:border-indigo-300 px-2.5 py-1.5 rounded-lg transition-colors"
+                id="debug-btn-link"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Lakukan Tes Koneksi & Cookie (Buka Tab Baru)
+              </a>
+              <span className="text-[9px] text-slate-400 self-center">
+                *Klik tautan di atas untuk mengaktifkan izin cookie & menguji format API key.
+              </span>
+            </div>
           </div>
         </div>
       )}
