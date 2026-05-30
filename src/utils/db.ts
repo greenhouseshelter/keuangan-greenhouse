@@ -93,13 +93,27 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
   const id = setTimeout(() => controller.abort(), timeout);
 
   try {
+    const headers: Record<string, string> = { ...(options.headers || {}) };
+
+    if (isSheetsDatabaseCall && isDirect) {
+      if ((options.method || 'GET').toUpperCase() === 'POST') {
+        // Force text/plain to bypass CORS preflight check on direct script.google.com posts
+        headers['Content-Type'] = 'text/plain';
+      } else {
+        // Remove Content-Type for GET requests to script.google.com to prevent preflight OPTIONS requests
+        delete headers['Content-Type'];
+      }
+    } else {
+      // Normal localhost/proxy flow
+      if (!headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+    }
+
     const fetchOptions: any = {
       method: options.method || 'GET',
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
-      },
+      headers,
       redirect: options.redirect || 'follow'
     };
 
