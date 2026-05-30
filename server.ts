@@ -319,4 +319,10 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.VERCEL) {
+  console.log('Detected Vercel environment. Skipping local app.listen().');
+} else {
+  startServer();
+}
+
+export default app;
