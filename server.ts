@@ -92,6 +92,32 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+app.get('/api/debug-key', (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.json({
+      status: 'missing',
+      message: 'Kunci API (GEMINI_API_KEY) tidak ditemukan di panel Secrets environment server.'
+    });
+  }
+  
+  const trimmed = apiKey.trim();
+  const hasWhitespace = apiKey !== trimmed;
+  const isValidFormat = apiKey.startsWith('AIzaSy') || apiKey.startsWith('AQ.');
+  
+  return res.json({
+    status: 'found',
+    length: apiKey.length,
+    prefix: apiKey.slice(0, 6) + '...',
+    endsWith: '...' + apiKey.slice(-4),
+    hasWhitespace,
+    isValidFormat,
+    message: isValidFormat 
+      ? (hasWhitespace ? 'Kunci ditemukan, tetapi mengandung spasi kosong di awal/akhir baris. Harap hapus spasi tersebut pada panel Secrets.' : 'Kunci ditemukan dan berformat valid (dimulai dengan AIzaSy atau AQ).')
+      : 'Kunci ditemukan tetapi format tidak biasa (tidak dimulai dengan "AIzaSy" atau "AQ."). Mohon pastikan kembali Anda meng-copy seluruh teks API Key dengan benar.'
+  });
+});
+
 app.get('/api/config', (req, res) => {
   const cfg = getBackendConfig();
   res.json({
