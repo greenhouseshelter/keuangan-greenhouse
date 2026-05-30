@@ -15,9 +15,7 @@ export default function AdminLogsView() {
   const itemsPerPage = 15;
 
   useEffect(() => {
-    // Show local logs immediately
-    setLogs(getActivityLogs());
-    // Then trigger background sync with Sheets
+    // Trigger background sync & loading directly from cloud
     triggerSync();
   }, []);
 

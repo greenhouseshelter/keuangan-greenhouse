@@ -1,60 +1,35 @@
 import { ActivityLog } from '../types';
 import { addActivityLogToSheets, getActivityLogsFromSheets, clearActivityLogsOnSheets } from './db';
 
-export function getActivityLogs(): ActivityLog[] {
-  try {
-    const raw = localStorage.getItem('greenhouse_activity_logs');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn("Gagal membaca log aktivitas lokal:", e);
-  }
-  return [];
-}
+// Cache logs in memory during current session to provide fast UI interaction
+let inMemoryLogsCache: ActivityLog[] = [];
 
-/**
- * Sync local activity logs with Google Sheets, merging remote logs with local
- */
-export async function syncActivityLogsWithSheets(): Promise<ActivityLog[]> {
-  const localLogs = getActivityLogs();
+export async function getActivityLogs(): Promise<ActivityLog[]> {
   try {
     const sheetsLogs = await getActivityLogsFromSheets();
     if (sheetsLogs && sheetsLogs.length > 0) {
-      // Merge unique entries by ID
-      const mergedMap = new Map<string, ActivityLog>();
-      
-      // Load sheets logs
-      sheetsLogs.forEach(log => {
-        if (log && log.id) mergedMap.set(log.id, log);
-      });
-      
-      // Load/overwrite with local logs
-      localLogs.forEach(log => {
-        if (log && log.id) mergedMap.set(log.id, log);
-      });
-
       // Sort by timestamp descending
-      const merged = Array.from(mergedMap.values()).sort((a, b) => {
+      const sorted = [...sheetsLogs].sort((a, b) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       }).slice(0, 1000);
-
-      localStorage.setItem('greenhouse_activity_logs', JSON.stringify(merged));
-      return merged;
+      inMemoryLogsCache = sorted;
+      return sorted;
     }
   } catch (err) {
-    console.warn("Gagal melakukan pencocokan & unduh log dari Sheets:", err);
+    console.warn("Gagal mengambil log dari cloud Sheets:", err);
   }
-  return localLogs;
+  return inMemoryLogsCache;
 }
 
-export function addActivityLog(action: string, details: string): ActivityLog[] {
-  const logs = getActivityLogs();
-  
-  // Resolve current active user from localStorage
+/**
+ * Sync local activity logs with Google Sheets (compatibility helper)
+ */
+export async function syncActivityLogsWithSheets(): Promise<ActivityLog[]> {
+  return getActivityLogs();
+}
+
+export function addActivityLog(action: string, details: string): void {
+  // Resolve current active user from active login session (localStorage remains ONLY for auth token/session validation)
   let username = 'Sistem';
   let role = 'System';
   try {
@@ -77,25 +52,17 @@ export function addActivityLog(action: string, details: string): ActivityLog[] {
     details
   };
 
-  const updated = [newLog, ...logs].slice(0, 1000); // cap to 1000 logs for memory performance
-  try {
-    localStorage.setItem('greenhouse_activity_logs', JSON.stringify(updated));
-  } catch (e) {
-    console.error("Gagal menyimpan log aktivitas ke penyimpanan lokal:", e);
-  }
+  // Add to in-memory cache to make it responsive
+  inMemoryLogsCache = [newLog, ...inMemoryLogsCache].slice(0, 1000);
 
-  // Push to Sheets asynchronously in the background
+  // Push straight to cloud (Sheets)
   addActivityLogToSheets(newLog).catch(err => {
     console.warn("Gagal mengunggah log ke Google Sheets (Tindakan Background):", err);
   });
-
-  return updated;
 }
 
 export function clearActivityLogs(): void {
-  try {
-    localStorage.removeItem('greenhouse_activity_logs');
-  } catch (e) {}
+  inMemoryLogsCache = [];
   
   // Clear on Sheets asynchronously in the background
   clearActivityLogsOnSheets().catch(err => {
