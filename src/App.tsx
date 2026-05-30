@@ -15,10 +15,11 @@ import AdminAccountsView from './components/AdminAccountsView';
 import AdminProjectsView from './components/AdminProjectsView';
 import ChangePasswordView from './components/ChangePasswordView';
 import AdminLogsView from './components/AdminLogsView';
+import SystemSettingsView from './components/SystemSettingsView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff, AlertTriangle
+  Eye, EyeOff, AlertTriangle, Settings
 } from 'lucide-react';
 
 const GOOGLE_APPS_SCRIPT_CODE = `// GOOGLE APPS SCRIPT DATABASE CONNECTOR (Code.gs)
@@ -568,6 +569,7 @@ export default function App() {
       items.push({ id: 'laporan', name: 'Laporan Laba Rugi', icon: FileBarChart2 });
       items.push({ id: 'proyek', name: 'Kelola Proyek', icon: Sprout });
       items.push({ id: 'akun', name: 'Kelola Akun', icon: Layers });
+      items.push({ id: 'settings', name: 'Aturan Lampiran', icon: Settings });
     }
 
     if (role === 'Admin' || role === 'Accounting') {
@@ -702,16 +704,6 @@ export default function App() {
               </button>
             </form>
           </div>
-
-          {/* Online only connection alert */}
-          <div className="bg-blue-50 p-4 border border-blue-100 rounded-3xl text-[11px] text-blue-800 leading-relaxed flex gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold block mb-0.5 text-blue-900">📢 Sistem Cloud Online Only:</span>
-              Seluruh data dimuat secara langsung dan real-time dari Google Sheets Anda secara online tanpa penyimpanan lokal demi keamanan dan integritas data pencatatan kebun.
-            </div>
-          </div>
-
         </div>
       </div>
     );
@@ -999,6 +991,10 @@ export default function App() {
 
           {activeTab === 'ubah-password' && (
             <ChangePasswordView currentUser={currentUser} onPasswordChanged={handlePasswordChanged} />
+          )}
+
+          {activeTab === 'settings' && (currentUser.role === 'Admin' || currentUser.role === 'Finance' || currentUser.role === 'Accounting') && (
+            <SystemSettingsView currentUsername={currentUser.username} currentRole={currentUser.role} />
           )}
 
         </main>

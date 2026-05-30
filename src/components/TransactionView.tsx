@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, Project, Role, FinancialCategory, TransactionType, Account, ProjectItem } from '../types';
-import { getAccounts, getProjects } from '../utils/db';
+import { getAccounts, getProjects, getSettings, SystemSettings } from '../utils/db';
 import { addActivityLog } from '../utils/activityLogger';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
-  Printer, ChevronLeft, ChevronRight, Check, AlertTriangle
+  Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2
 } from 'lucide-react';
 
 interface TransactionViewProps {
@@ -17,6 +17,52 @@ interface TransactionViewProps {
   onDeleteTransaction: (id: string) => Promise<boolean>;
   initialFilter?: { project?: Project; type?: 'Inflow' | 'Outflow' };
 }
+
+// Utility: Compress image to Base64 in standard JPEG format under 600px limits
+const compressImageToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const image = new globalThis.Image();
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const max_size = 600;
+        let width = image.width;
+        let height = image.height;
+
+        if (width > height) {
+          if (width > max_size) {
+            height *= max_size / width;
+            width = max_size;
+          }
+        } else {
+          if (height > max_size) {
+            width *= max_size / height;
+            height = max_size;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(image, 0, 0, width, height);
+        }
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(dataUrl);
+      };
+      image.onerror = (err) => {
+        reject(err);
+      };
+      if (readerEvent.target?.result) {
+        image.src = readerEvent.target.result as string;
+      }
+    };
+    reader.onerror = (err) => {
+      reject(err);
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export default function TransactionView({ 
   transactions, 
@@ -34,6 +80,35 @@ export default function TransactionView({
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'All'>(initialFilter?.type || 'All');
   const [categoryFilter, setCategoryFilter] = useState<FinancialCategory | 'All'>('All');
   const [accountFilter, setAccountFilter] = useState<string | 'All'>('All');
+  
+  // Settings & attachment upload states
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({ imageRequiredIn: false, imageRequiredOut: false });
+  const [formImage, setFormImage] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  const handleImageFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('File yang dipilih harus berupa gambar (JPEG/PNG/JPG).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file maksimal adalah 5MB.');
+      return;
+    }
+    
+    setCompressing(true);
+    try {
+      const base64 = await compressImageToBase64(file);
+      setFormImage(base64);
+    } catch (err) {
+      console.error('Gagal memproses gambar:', err);
+      alert('Gagal memproses file gambar. Silakan coba file gambar lainnya.');
+    } finally {
+      setCompressing(false);
+    }
+  };
   
   // Date range download states
   const [downloadStartDate, setDownloadStartDate] = useState(() => {
@@ -69,9 +144,12 @@ export default function TransactionView({
   useEffect(() => {
     const loadRequiredData = async () => {
       try {
-        const [accs, projs] = await Promise.all([getAccounts(), getProjects()]);
+        const [accs, projs, settings] = await Promise.all([getAccounts(), getProjects(), getSettings()]);
         setAccountsList(accs);
         setProjectsList(projs);
+        if (settings) {
+          setSystemSettings(settings);
+        }
         
         if (projs.length > 0) {
           setFormProject(projs[0].name);
@@ -109,6 +187,7 @@ export default function TransactionView({
     setFormCategory('Operational');
     setFormAmount('');
     setFormDescription('');
+    setFormImage('');
     setFormError('');
     setIsEditing(false);
     setEditingId('');
@@ -165,6 +244,7 @@ export default function TransactionView({
     setFormAmount(tx.amount);
     setFormDescription(tx.description);
     setFormAccount(tx.account || '');
+    setFormImage(tx.image || '');
     setShowForm(true);
   };
 
@@ -187,6 +267,16 @@ export default function TransactionView({
       return;
     }
 
+    // Required image validation check based on the active role and policy
+    const isImageRequired = formType === 'Inflow' 
+      ? systemSettings.imageRequiredIn 
+      : systemSettings.imageRequiredOut;
+
+    if (isImageRequired && !formImage) {
+      setFormError(`Silakan lampirkan gambar/foto bukti transaksi untuk transaksi Uang ${formType === 'Inflow' ? 'Masuk (Inflow)' : 'Keluar (Outflow)'}.`);
+      return;
+    }
+
     const txId = isEditing ? editingId : `tx-${Math.floor(Date.now() + Math.random() * 1000)}`;
     
     let finalCategory = formCategory;
@@ -205,7 +295,7 @@ export default function TransactionView({
       recordedBy: isEditing ? (transactions.find(t => t.id === editingId)?.recordedBy || currentUser) : currentUser,
       createdAt: isEditing ? (transactions.find(t => t.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       account: formAccount,
-      image: ''
+      image: formImage
     };
 
     let success = false;
@@ -515,13 +605,14 @@ export default function TransactionView({
                 <th className="py-3 px-4 text-right">Uang Keluar</th>
                 <th className="py-3 px-4">Keterangan</th>
                 <th className="py-3 px-4">Dicatat Oleh</th>
+                <th className="py-3 px-4 text-center font-semibold">Bukti</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
                     Tidak ditemukan pencatatan transaksi yang cocok dengan pencarian Anda.
                   </td>
                 </tr>
@@ -571,6 +662,20 @@ export default function TransactionView({
                         <span className="px-2 py-0.5 bg-slate-50 rounded-full border border-slate-105 text-slate-600 font-mono capitalize">
                           {t.recordedBy}
                         </span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        {t.image ? (
+                          <button
+                            onClick={() => setLightboxImage(t.image || null)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold transition-all shadow-3xs cursor-pointer active:scale-95"
+                            title="Klik untuk melihat bukti transaksi"
+                          >
+                            <Image className="w-3 h-3 text-emerald-600" />
+                            <span>Lihat Bukti</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-350 italic font-medium font-sans text-[10px]">-</span>
+                        )}
                       </td>
                       <td className="py-4 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 font-semibold">
@@ -803,6 +908,98 @@ export default function TransactionView({
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
                   />
                 </div>
+
+                {/* Bukti Transaksi (File upload with drag & drop) */}
+                <div className="space-y-1.5 pt-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-slate-500 font-semibold uppercase text-[10px]">
+                      LAMPIRAN BUKTI GAMBAR / NOTA {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && <span className="text-rose-600 font-extrabold">*Wajib</span>}
+                    </label>
+                    {formImage && (
+                      <button
+                        type="button"
+                        onClick={() => setFormImage('')}
+                        className="text-[10px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" /> Hapus File
+                      </button>
+                    )}
+                  </div>
+
+                  {formImage ? (
+                    <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 h-32 flex items-center justify-center group shadow-2xs">
+                      <img 
+                        src={formImage} 
+                        alt="Preview Bukti" 
+                        className="h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLightboxImage(formImage)}
+                          className="px-3 py-1.5 bg-white font-bold text-slate-900 rounded-lg text-[10px] hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                        >
+                          Tinjau Bukti
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragging(true);
+                      }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) handleImageFile(file);
+                      }}
+                      onClick={() => document.getElementById('evidence-file-input')?.click()}
+                      className={`border-2 border-dashed rounded-2xl p-5 text-center flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
+                        isDragging 
+                          ? 'border-slate-900 bg-slate-55' 
+                          : 'border-slate-200 bg-slate-50/60 hover:bg-slate-55'
+                      }`}
+                    >
+                      <input 
+                        type="file" 
+                        id="evidence-file-input"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageFile(file);
+                        }}
+                        className="hidden"
+                      />
+                      {compressing ? (
+                        <Loader2 className="w-5 h-5 text-slate-900 animate-spin" />
+                      ) : (
+                        <div className="p-2 bg-white border border-slate-100 rounded-xl shadow-3xs text-slate-400 shrink-0">
+                          <Plus className="w-4 h-4 text-slate-500" />
+                        </div>
+                      )}
+                      <div className="space-y-0.5 pointer-events-none">
+                        <span className="text-xs font-bold text-slate-900 block">
+                          {compressing ? 'Menyusutkan & Memproses Gambar...' : 'Unggah foto nota, atau seret file ke sini'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          File Gambar PNG, JPG, JPEG (Maksimal 5MB)
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && !formImage && (
+                    <p className="text-[10px] text-rose-600 flex items-center gap-1 font-semibold">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Unggah foto bukti nota wajib untuk jenis transaksi ini.
+                    </p>
+                  )}
+                </div>
+
               </div>
 
               {/* Sticky Footer */}
@@ -810,15 +1007,20 @@ export default function TransactionView({
                 <button
                   type="button"
                   onClick={handleCloseForm}
-                  className="px-4 py-2 border border-slate-250 bg-white rounded-xl text-slate-655 hover:bg-slate-50 transition-colors font-semibold shadow-3xs text-xs"
+                  className="px-4 py-2 border border-slate-250 bg-white rounded-xl text-slate-655 hover:bg-slate-50 transition-colors font-semibold shadow-3xs text-xs cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white font-semibold rounded-xl flex items-center gap-1 transition-colors text-xs"
+                  disabled={compressing}
+                  className="px-5 py-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center gap-1 transition-colors text-xs cursor-pointer"
                 >
-                  <Save className="w-3.5 h-3.5" />
+                  {compressing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
                   {isEditing ? 'Perbarui Data' : 'Simpan Transaksi'}
                 </button>
               </div>
@@ -827,6 +1029,52 @@ export default function TransactionView({
           </div>
         </div>
       )}
+
+      {/* Lightbox / Pratinjau Bukti Image Modal */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-55 animate-fade-in no-print"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div 
+            className="bg-white max-w-2xl w-full rounded-3xl overflow-hidden shadow-2xl relative animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-850 flex items-center gap-2">
+                <Image className="w-4 h-4 text-emerald-600" />
+                Detail Lampiran Bukti Transaksi
+              </h3>
+              <button
+                onClick={() => setLightboxImage(null)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 bg-slate-50 flex items-center justify-center max-h-[70vh] overflow-auto select-none">
+              <img 
+                src={lightboxImage} 
+                alt="Bukti Nota Transaksi" 
+                className="max-w-full max-h-[60vh] object-contain rounded-xl border border-slate-205 shadow-xs"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-white flex justify-between items-center text-[10px]">
+              <span className="text-slate-400 font-mono">Format: Compressed Base64 JPEG</span>
+              <button
+                onClick={() => setLightboxImage(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Tutup Pratinjau
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

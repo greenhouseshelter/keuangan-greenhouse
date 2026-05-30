@@ -409,10 +409,77 @@ export interface SystemSettings {
 }
 
 export async function getSettings(): Promise<SystemSettings> {
-  return { imageRequiredIn: false, imageRequiredOut: false };
+  const config = getDatabaseConfig();
+  const url = `${config.sheetsApiUrl}?action=getSettings`;
+  
+  let imageRequiredIn = false;
+  let imageRequiredOut = false;
+  
+  // Try loading from localStorage first to guarantee instant speed
+  const local = localStorage.getItem('greenhouse_system_settings');
+  if (local) {
+    try {
+      const parsed = JSON.parse(local);
+      imageRequiredIn = !!parsed.imageRequiredIn;
+      imageRequiredOut = !!parsed.imageRequiredOut;
+    } catch (e) {}
+  }
+  
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (res.ok) {
+      const responseJson = await res.json();
+      if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
+        for (const row of responseJson.data) {
+          if (row.key === 'imageRequiredIn') {
+            try {
+              imageRequiredIn = typeof row.value === 'string' ? JSON.parse(row.value) : !!row.value;
+            } catch (e) {
+              imageRequiredIn = row.value === 'true' || row.value === 1 || row.value === true;
+            }
+          }
+          if (row.key === 'imageRequiredOut') {
+            try {
+              imageRequiredOut = typeof row.value === 'string' ? JSON.parse(row.value) : !!row.value;
+            } catch (e) {
+              imageRequiredOut = row.value === 'true' || row.value === 1 || row.value === true;
+            }
+          }
+        }
+        // Save latest sync locally
+        localStorage.setItem('greenhouse_system_settings', JSON.stringify({ imageRequiredIn, imageRequiredOut }));
+      }
+    }
+  } catch (err) {
+    console.warn("Gagal mengambil pengaturan dari Google Sheets, menggunakan data cache lokal:", err);
+  }
+  
+  return { imageRequiredIn, imageRequiredOut };
 }
 
-export async function saveSettings(key: string, value: string): Promise<boolean> {
+export async function saveSettings(key: string, value: boolean): Promise<boolean> {
+  const config = getDatabaseConfig();
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateSettings', key, value }),
+    });
+    if (res.ok) {
+      const local = localStorage.getItem('greenhouse_system_settings');
+      const settings = local ? JSON.parse(local) : { imageRequiredIn: false, imageRequiredOut: false };
+      settings[key] = value;
+      localStorage.setItem('greenhouse_system_settings', JSON.stringify(settings));
+      return true;
+    }
+  } catch (err) {
+    console.warn("Gagal menyimpan pengaturan ke Google Sheets Web App:", err);
+  }
+  
+  // Fallback local save in case of being offline
+  const local = localStorage.getItem('greenhouse_system_settings');
+  const settings = local ? JSON.parse(local) : { imageRequiredIn: false, imageRequiredOut: false };
+  settings[key] = value;
+  localStorage.setItem('greenhouse_system_settings', JSON.stringify(settings));
   return true;
 }
 
