@@ -5,7 +5,8 @@ import { addActivityLog } from '../utils/activityLogger';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
-  Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2
+  Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2,
+  Camera, VideoOff, RefreshCw
 } from 'lucide-react';
 
 interface TransactionViewProps {
@@ -87,6 +88,102 @@ export default function TransactionView({
   const [isDragging, setIsDragging] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // Camera capture states and refs
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [activeFacingMode, setActiveFacingMode] = useState<'user' | 'environment'>('environment');
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+
+  const startCamera = async (mode: 'user' | 'environment' = 'environment') => {
+    setCameraError('');
+    setShowCamera(true);
+    
+    // Clean up any old camera streaming sessions
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: mode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(e => console.warn("Interrupted video streaming:", e));
+      }
+    } catch (err: any) {
+      console.error('Gagal membuka kamera:', err);
+      setCameraError('Gagal mengakses kamera. Silakan jalankan tautan app di tab baru dan pastikan memberikan izin akses kamera.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
+    setCameraError('');
+  };
+
+  const toggleCameraFacing = () => {
+    const nextMode = activeFacingMode === 'user' ? 'environment' : 'user';
+    setActiveFacingMode(nextMode);
+    startCamera(nextMode);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    
+    setCompressing(true);
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      const max_size = 600;
+      
+      let width = video.videoWidth || 640;
+      let height = video.videoHeight || 480;
+
+      if (width > height) {
+        if (width > max_size) {
+          height *= max_size / width;
+          width = max_size;
+        }
+      } else {
+        if (height > max_size) {
+          width *= max_size / height;
+          height = max_size;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, width, height);
+      }
+
+      // High-quality JPEG compression under 200kb
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      setFormImage(dataUrl);
+      
+      // Stop webcam and cleanup
+      stopCamera();
+    } catch (err) {
+      console.error('Error capture photo:', err);
+      alert('Gagal capturing photo dari stream. Silakan coba file upload biasa.');
+    } finally {
+      setCompressing(false);
+    }
+  };
 
   const handleImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -177,6 +274,7 @@ export default function TransactionView({
 
   // Reset form
   const resetForm = () => {
+    stopCamera();
     setFormDate(new Date().toISOString().split('T')[0]);
     if (projectsList.length > 0) {
       setFormProject(projectsList[0].name);
@@ -909,24 +1007,106 @@ export default function TransactionView({
                   />
                 </div>
 
-                {/* Bukti Transaksi (File upload with drag & drop) */}
+                {/* Bukti Transaksi (File upload with drag & drop or direct camera capture) */}
                 <div className="space-y-1.5 pt-1.5">
                   <div className="flex justify-between items-center">
                     <label className="block text-slate-500 font-semibold uppercase text-[10px]">
                       LAMPIRAN BUKTI GAMBAR / NOTA {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && <span className="text-rose-600 font-extrabold">*Wajib</span>}
                     </label>
-                    {formImage && (
-                      <button
-                        type="button"
-                        onClick={() => setFormImage('')}
-                        className="text-[10px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <Trash2 className="w-3 h-3" /> Hapus File
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {!formImage && !showCamera && (
+                        <button
+                          type="button"
+                          onClick={() => startCamera(activeFacingMode)}
+                          className="text-[10px] text-emerald-700 hover:text-emerald-850 bg-emerald-50 hover:bg-emerald-100 border border-emerald-150 px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-3xs"
+                        >
+                          <Camera className="w-3 h-3" /> Ambil dari Kamera
+                        </button>
+                      )}
+                      {formImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormImage('');
+                            stopCamera();
+                          }}
+                          className="text-[10px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" /> Hapus File
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {formImage ? (
+                  {showCamera ? (
+                    <div className="border border-slate-200 rounded-2xl p-3 bg-slate-950 flex flex-col items-center justify-center gap-3 overflow-hidden shadow-xs relative min-h-[220px]">
+                      {cameraError ? (
+                        <div className="text-center p-4 text-white flex flex-col items-center justify-center gap-2">
+                          <VideoOff className="w-8 h-8 text-rose-500" />
+                          <span className="text-xs font-semibold">{cameraError}</span>
+                          <button
+                            type="button"
+                            onClick={stopCamera}
+                            className="mt-2 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-lg text-[10px] cursor-pointer"
+                          >
+                            Gunakan Upload File Biasa
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="relative w-full aspect-video md:max-h-48 bg-black rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
+                            <video
+                              ref={videoRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            {/* Viewfinder Target Border Overlay */}
+                            <div className="absolute inset-4 border border-white/20 rounded-lg pointer-events-none flex items-center justify-center">
+                              <div className="w-8 h-8 border-t-2 border-l-2 border-emerald-500 absolute top-2 left-2" />
+                              <div className="w-8 h-8 border-t-2 border-r-2 border-emerald-500 absolute top-2 right-2" />
+                              <div className="w-8 h-8 border-b-2 border-l-2 border-emerald-500 absolute bottom-2 left-2" />
+                              <div className="w-8 h-8 border-b-2 border-r-2 border-emerald-500 absolute bottom-2 right-2" />
+                              {/* Scanning line indicator */}
+                              <div className="w-full h-0.5 bg-emerald-500/30 absolute top-1/2 left-0 animate-pulse" />
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 w-full justify-center">
+                            <button
+                              type="button"
+                              onClick={capturePhoto}
+                              disabled={compressing}
+                              className="flex items-center justify-center gap-1.5 px-4.5 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white font-extrabold rounded-xl text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              <Camera className="w-4 h-4" />
+                              <span>Ambil Foto</span>
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={toggleCameraFacing}
+                              className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold rounded-xl text-[11px] transition-all cursor-pointer"
+                              title="Ganti kamera depan / belakang"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>Putar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={stopCamera}
+                              className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl text-[11px] transition-all cursor-pointer"
+                            >
+                              <span>Batal</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : formImage ? (
                     <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 h-32 flex items-center justify-center group shadow-2xs">
                       <img 
                         src={formImage} 

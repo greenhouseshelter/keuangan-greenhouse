@@ -800,7 +800,7 @@ export default function App() {
       <div className="flex-1 flex flex-col md:flex-row relative">
         
         {/* Mobile Navigation Bar */}
-        <div className="md:hidden bg-white text-slate-800 px-6 py-3.5 flex justify-between items-center z-30 border-b border-slate-200 shadow-xs no-print">
+        <div className="md:hidden bg-white text-slate-800 px-6 py-3.5 flex justify-between items-center sticky top-[61px] z-30 border-b border-slate-200 shadow-xs no-print">
           <div className="flex items-center gap-2">
             <Menu className="w-5 h-5 text-slate-600 cursor-pointer" onClick={() => setMobileMenuOpen(true)} />
             <span className="text-xs font-semibold font-display tracking-wide uppercase text-slate-700">Menu Navigasi</span>

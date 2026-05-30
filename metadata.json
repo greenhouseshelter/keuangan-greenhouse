@@ -1,6 +1,6 @@
 {
   "name": "Kas Greenhouse",
   "description": "Financial recording application for greenhouses with multi-project cash tracking, user roles, Google Sheets synchronization, and AI financial analysis.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
