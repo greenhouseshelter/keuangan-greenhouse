@@ -1,4 +1,4 @@
-import app from './api-server';
+import app from './api/index';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
