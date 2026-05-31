@@ -84,6 +84,13 @@ const formatIndonesianDate = (dateStr: string): string => {
   return `${day}-${monthName}-${year}`;
 };
 
+// Helper to format string with Indonesian thousand separator
+const formatThousand = (val: string): string => {
+  const clean = val.replace(/\./g, '').replace(/[^0-9]/g, '');
+  if (!clean) return '';
+  return parseInt(clean, 10).toLocaleString('id-ID');
+};
+
 // Custom Indonesian Date Picker element using transparent native picker overlay
 const IndonesianDatePicker = ({ 
   value, 
@@ -98,8 +105,28 @@ const IndonesianDatePicker = ({
   placeholder?: string;
   inputClassName?: string;
 }) => {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (inputRef.current) {
+      if (typeof inputRef.current.showPicker === 'function') {
+        try {
+          inputRef.current.showPicker();
+        } catch (err) {
+          console.warn('Native showPicker failed, relying on default behavior', err);
+        }
+      } else {
+        inputRef.current.click();
+      }
+    }
+  };
+
   return (
-    <div className={`relative group ${className}`}>
+    <div 
+      className={`relative group cursor-pointer ${className}`}
+      onClick={handleClick}
+    >
       <div className={`w-full border border-slate-200 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-between group-hover:border-slate-350 transition-colors ${inputClassName}`}>
         <span className={value ? 'text-slate-800 font-semibold' : 'text-slate-400 font-normal'}>
           {value ? formatIndonesianDate(value) : placeholder}
@@ -107,9 +134,11 @@ const IndonesianDatePicker = ({
         <Calendar className="w-3.5 h-3.5 text-slate-450 group-hover:text-slate-650 transition-colors ml-1 shrink-0" />
       </div>
       <input 
+        ref={inputRef}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
       />
     </div>
@@ -143,10 +172,12 @@ export default function TransactionView({
     project: 'All',
     category: 'All',
     account: 'All',
-    inflow: '',
-    outflow: '',
+    inflowMin: '',
+    inflowMax: '',
+    outflowMin: '',
+    outflowMax: '',
     description: '',
-    recordedBy: ''
+    recordedBy: 'All'
   });
   
   // Settings & attachment upload states
@@ -660,10 +691,12 @@ export default function TransactionView({
       project: 'All',
       category: 'All',
       account: 'All',
-      inflow: '',
-      outflow: '',
+      inflowMin: '',
+      inflowMax: '',
+      outflowMin: '',
+      outflowMax: '',
       description: '',
-      recordedBy: ''
+      recordedBy: 'All'
     });
     setSortCriteria([
       { column: 'date', direction: 'desc' }
@@ -675,6 +708,11 @@ export default function TransactionView({
     setAccountFilter('All');
     setupFilteredPageCountAndReset();
   };
+
+  // Get unique list of operators who recorded transactions
+  const recordedByOptions = Array.from(
+    new Set(transactions.map(t => t.recordedBy).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
 
   // Process filter logic & multi-column sorting
   const getFilteredList = () => {
@@ -732,14 +770,16 @@ export default function TransactionView({
       list = list.filter(t => t.account === colFilters.account);
     }
 
-    if (colFilters.inflow.trim()) {
-      const q = colFilters.inflow.replace(/\./g, '');
-      list = list.filter(t => t.type === 'Inflow' && t.amount.toString().includes(q));
+    if (colFilters.inflowMin.trim() || colFilters.inflowMax.trim()) {
+      const minVal = colFilters.inflowMin.trim() ? parseFloat(colFilters.inflowMin.replace(/\./g, '')) : -Infinity;
+      const maxVal = colFilters.inflowMax.trim() ? parseFloat(colFilters.inflowMax.replace(/\./g, '')) : Infinity;
+      list = list.filter(t => t.type === 'Inflow' && t.amount >= minVal && t.amount <= maxVal);
     }
 
-    if (colFilters.outflow.trim()) {
-      const q = colFilters.outflow.replace(/\./g, '');
-      list = list.filter(t => t.type === 'Outflow' && t.amount.toString().includes(q));
+    if (colFilters.outflowMin.trim() || colFilters.outflowMax.trim()) {
+      const minVal = colFilters.outflowMin.trim() ? parseFloat(colFilters.outflowMin.replace(/\./g, '')) : -Infinity;
+      const maxVal = colFilters.outflowMax.trim() ? parseFloat(colFilters.outflowMax.replace(/\./g, '')) : Infinity;
+      list = list.filter(t => t.type === 'Outflow' && t.amount >= minVal && t.amount <= maxVal);
     }
 
     if (colFilters.description.trim()) {
@@ -747,9 +787,8 @@ export default function TransactionView({
       list = list.filter(t => t.description.toLowerCase().includes(q));
     }
 
-    if (colFilters.recordedBy.trim()) {
-      const q = colFilters.recordedBy.toLowerCase();
-      list = list.filter(t => t.recordedBy.toLowerCase().includes(q));
+    if (colFilters.recordedBy !== 'All' && colFilters.recordedBy.trim()) {
+      list = list.filter(t => t.recordedBy === colFilters.recordedBy);
     }
 
     // --- Multi-Column Sort logic ---
@@ -1123,23 +1162,53 @@ export default function TransactionView({
                     ))}
                   </select>
                 </td>
-                <td className="py-1 px-2">
-                  <input
-                    type="text"
-                    placeholder="Saring rp..."
-                    value={colFilters.inflow}
-                    onChange={(e) => handleColFilterChange('inflow', e.target.value)}
-                    className="w-full px-2 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right"
-                  />
+                <td className="py-1 px-1.5 min-w-[135px]">
+                  <div className="flex flex-col gap-1 py-0.5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8.5px] text-slate-400 font-extrabold shrink-0 w-8 text-right uppercase">Min</span>
+                      <input
+                        type="text"
+                        placeholder="Min rp..."
+                        value={colFilters.inflowMin}
+                        onChange={(e) => handleColFilterChange('inflowMin', formatThousand(e.target.value))}
+                        className="w-full px-1.5 py-0.5 text-[9.5px] border border-slate-200 bg-white rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right font-semibold text-slate-700"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8.5px] text-slate-400 font-extrabold shrink-0 w-8 text-right uppercase">Max</span>
+                      <input
+                        type="text"
+                        placeholder="Max rp..."
+                        value={colFilters.inflowMax}
+                        onChange={(e) => handleColFilterChange('inflowMax', formatThousand(e.target.value))}
+                        className="w-full px-1.5 py-0.5 text-[9.5px] border border-slate-200 bg-white rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right font-semibold text-slate-700"
+                      />
+                    </div>
+                  </div>
                 </td>
-                <td className="py-1 px-2">
-                  <input
-                    type="text"
-                    placeholder="Saring rp..."
-                    value={colFilters.outflow}
-                    onChange={(e) => handleColFilterChange('outflow', e.target.value)}
-                    className="w-full px-2 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right"
-                  />
+                <td className="py-1 px-1.5 min-w-[135px]">
+                  <div className="flex flex-col gap-1 py-0.5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8.5px] text-slate-400 font-extrabold shrink-0 w-8 text-right uppercase">Min</span>
+                      <input
+                        type="text"
+                        placeholder="Min rp..."
+                        value={colFilters.outflowMin}
+                        onChange={(e) => handleColFilterChange('outflowMin', formatThousand(e.target.value))}
+                        className="w-full px-1.5 py-0.5 text-[9.5px] border border-slate-200 bg-white rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right font-semibold text-slate-700"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8.5px] text-slate-400 font-extrabold shrink-0 w-8 text-right uppercase">Max</span>
+                      <input
+                        type="text"
+                        placeholder="Max rp..."
+                        value={colFilters.outflowMax}
+                        onChange={(e) => handleColFilterChange('outflowMax', formatThousand(e.target.value))}
+                        className="w-full px-1.5 py-0.5 text-[9.5px] border border-slate-200 bg-white rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right font-semibold text-slate-700"
+                      />
+                    </div>
+                  </div>
                 </td>
                 <td className="py-1 px-2">
                   <input
@@ -1151,13 +1220,16 @@ export default function TransactionView({
                   />
                 </td>
                 <td className="py-1 px-2">
-                  <input
-                    type="text"
-                    placeholder="Saring dicatat..."
+                  <select
                     value={colFilters.recordedBy}
                     onChange={(e) => handleColFilterChange('recordedBy', e.target.value)}
-                    className="w-full px-2 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono"
-                  />
+                    className="w-full px-1 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  >
+                    <option value="All">Semua</option>
+                    {recordedByOptions.map(op => (
+                      <option key={op} value={op}>{op}</option>
+                    ))}
+                  </select>
                 </td>
                 <td className="py-1 px-2 text-center text-slate-350 text-[10px] font-bold select-none">-</td>
                 <td className="py-1 px-2 text-center text-slate-350 text-[10px] font-bold select-none">-</td>
