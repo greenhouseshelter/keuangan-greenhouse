@@ -20,11 +20,11 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
   const loadingSteps = [
     'Mengumpulkan data keuangan dari database...',
     'Menghitung neraca laba-rugi kotor dan bersih...',
-    'Mengevaluasi efisiensi biaya hidroponik Melon Jepang...',
-    'Menganalisis margin keuntungan cabai rawit merah...',
-    'Mengkaji rasio pakan protein tinggi perikanan Nila...',
+    'Mengevaluasi efisiensi biaya ...',
+    'Menganalisis margin keuntungan ...',
+    'Mengkaji rasio pemasukan dan pengeluaran ...',
     'Membandingkan pengeluaran operasional greenhouse...',
-    'Merumuskan rekomendasi bisnis agribisnis strategis...'
+    'Merumuskan rekomendasi bisnis strategis...'
   ];
 
   const generateAnalysis = async () => {
