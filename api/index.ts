@@ -248,29 +248,48 @@ app.post('/api/analyze', async (req, res): Promise<any> => {
       `- [${t.date}] Proyek: ${t.project} | Tipe: ${t.type} | Kategori: ${t.category} | Jumlah: Rp ${t.amount.toLocaleString('id-ID')} | Ket: ${t.description}`
     ).join('\n');
 
-    const prompt = `Anda adalah konsultan keuangan agribisnis dan akuntan profesional untuk Greenhouse terintegrasi.
-Tolong buat laporan analisis keuangan mandiri yang cerdas, strategis, dan komprehensif berdasarkan data berikut.
+    const prompt = `Anda adalah konsultan keuangan agribisnis dan akuntan profesional untuk Greenhouse terintegrasi (greenhouse modern yang mengelola komoditas Melon, Cabe, Perikanan, dan Ternak).
+Tolong buat laporan analisis keuangan mandiri yang cerdas, strategis, dan komprehensif berdasarkan data transaksi di bawah ini.
 
-Ringkasan Keuangan Greenhouse:
+Ringkasan Keuangan Greenhouse Saat Ini:
 - Total Transaksi Tercatat: ${totalTransactions}
-- Total Uang Masuk (Inflow / Pendapatan): Rp ${totalInflow.toLocaleString('id-ID')}
-- Total Uang Keluar (Outflow / Pengeluaran): Rp ${totalOutflow.toLocaleString('id-ID')}
-- Keuntungan Bersih (Net Profit): Rp ${netProfit.toLocaleString('id-ID')}
+- Total Pemasukan (Inflow / Pendapatan): Rp ${totalInflow.toLocaleString('id-ID')}
+- Total Pengeluaran (Outflow / Pengoperasian): Rp ${totalOutflow.toLocaleString('id-ID')}
+- Laba/Rugi Bersih (Net Profit): Rp ${netProfit.toLocaleString('id-ID')}
 
-Breakdown Kinerja Keuangan Per Proyek:
-${projectBreakdown.map(p => `- Proyek ${p.name}: Pendapatan = Rp ${p.inflow.toLocaleString('id-ID')}, Pengeluaran = Rp ${p.outflow.toLocaleString('id-ID')}, Bersih = Rp ${p.net.toLocaleString('id-ID')}`).join('\n')}
+Detail Status Proyek Saat Ini:
+${projectBreakdown.map(p => `- Proyek ${p.name}: Pendapatan = Rp ${p.inflow.toLocaleString('id-ID')}, Pengeluaran = Rp ${p.outflow.toLocaleString('id-ID')}, Laba Bersih = Rp ${p.net.toLocaleString('id-ID')} (Tercatat ${p.recordedCount} transaksi)`).join('\n')}
 
-Daftar 10 Transaksi Terbaru:
+Daftar 10 Transaksi Terbaru untuk Referensi Tren Operasional:
 ${recentList}
 
-Tolong format laporan analisis Anda dengan rapi menggunakan Markdown. Berikan fokus khusus pada:
-1. **Analisis Kinerja Umum & Kesehatan Kas**: Berikan komentar atas performa keseluruhan (Sehat/Kurang Sehat) dan rasio pengeluaran dibanding pemasukan.
-2. **Kinerja Proyek Terbaik vs Lemah**: Proyek mana yang paling menguntungkan (sumber pemasukan tertinggi) dan proyek mana yang menyerap biaya operasional terbesar. Berikan analisis alasan logis agribisnis di balik angka tersebut.
-3. **Analisis Biaya Operasional**: Evaluasi pengeluaran operasional dibanding non-operasional.
-4. **Rekomendasi Strategis dan Efisiensi**: Berikan minimal 3 saran konkret, aplikatif, dan realistis untuk meningkatkan keuntungan masing-mashing proyek di masa depan (misal: pengefektifan pakan untuk Perikanan, efisiensi nutrisi AB Mix untuk Melon, atau promosi penjualan).
+---
 
-Tulis secara ramah, profesional, bernada optimis, dan mendalam dalam Bahasa Indonesia secara terperinci.
-`;
+Tolong susun laporan analisis Anda dengan tata bahasa Indonesia yang sangat profesional, elegan, sistematis, dan terperinci. Gunakan struktur Markdown yang kaya untuk memaksimalkan visual dengan aturan pemformatan khusus berikut:
+
+1. **Gunakan Judul Utama (#) dan Subjudul (##) secara rapi.**
+2. **Gunakan tag penanda status kapital di dalam judul atau paragraf** untuk menyoroti kondisi keuangan, seperti:
+   - Tulis \`[SEHAT]\` untuk proyek atau kondisi surplus stabil.
+   - Tulis \`[KURANG SEHAT]\` jika biaya membengkak atau rugi.
+   - Tulis \`[OPTIMAL]\` untuk efisiensi tinggi.
+   - Tulis \`[EVALUASI]\` untuk hal yang perlu perhatian segera.
+3. **Sajikan Tabel Kinerja Finansial Proyek** secara rahasia dan formal dengan format markdown:
+   | Nama Proyek | Total Pendapatan | Total Pengeluaran | Laba/Rugi Bersih | Evaluasi Status |
+   | :--- | :--- | :--- | :--- | :--- |
+   | Melon | Rp ... | Rp ... | Rp ... | [OPTIMAL] / [SEHAT] / [KURANG SEHAT] |
+   dan seterusnya.
+4. **Gunakan blockquote khusus (\`>\`) untuk menyoroti Peringatan atau Tips Finansial:**
+   - Untuk evaluasi penting atau peringatan rugi: \`> ⚠️ **[PENTING] Evaluasi Kritis:** ...teks penjelasan...\`
+   - Untuk ide penghematan biaya: \`> 💡 **[TIPS] Strategi Efisiensi Anggaran:** ...teks strategi...\`
+   - Untuk usulan bisnis/ekspansi cerdas: \`> ✨ **[REKOMENDASI] Pengembangan Usaha:** ...teks ide pengembangan...\`
+
+Struktur Laporan harus mencakup:
+- **# Ringkasan Eksekutif Finansial Greenhouse** (Analisis komprehensif kesehatan kas umum, rasio pengeluaran dibanding total pemasukan).
+- **# Analisis Komparatif Performa Proyek** (Sajikan tabel komparatif finansial proyek secara rapi dan dalam format Markdown, kemudian ulas proyek mana yang menjadi 'cash cow' penyumbang kas tertinggi dan proyek mana yang menyerap beban operasional berlebih).
+- **# Tinjauan Efisiensi Biaya Operasional** (Analisis struktur pengeluaran tak menguntungkan serta rasio biaya operasional terhadap total pengeluaran).
+- **# Peta Panduan Rekomendasi Finansial Strategis (Roadmap)** (Berikan minimal 3 poin saran konkret, aplikatif, dan realistis menggunakan pemformatan bullet-list tentang rekayasa pakan perikanan, rasio nutrisi melon, mitigasi harga cabe, atau pemanfaatan limbah ternak untuk mendongkrak keuntungan jangka panjang).
+
+Tulis laporan yang kaya informasi, bernada optimis namun objektif, serta memberikan wawasan agribisnis mendalam yang bernilai tinggi bagi pemilik modal.`;
 
     const ai = getAiClient();
     const response = await ai.models.generateContent({

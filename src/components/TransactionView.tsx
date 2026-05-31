@@ -89,6 +89,14 @@ export default function TransactionView({
   const [compressing, setCompressing] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
+  // Submit progress loading steps states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState(0);
+  const [submitProgressStep, setSubmitProgressStep] = useState('');
+  
+  // Floating Toast Notification states
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error'; txId?: string } | null>(null);
+
   // Camera capture states and refs
   const [showCamera, setShowCamera] = useState(false);
   const [cameraError, setCameraError] = useState('');
@@ -346,7 +354,7 @@ export default function TransactionView({
     setShowForm(true);
   };
 
-  // Submitting form
+  // Submitting form with professional progressive feedback and brief success notifications
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -396,6 +404,19 @@ export default function TransactionView({
       image: formImage
     };
 
+    // Begin Submission Progress State Stream (Tampilkan progres input transaksi)
+    setIsSubmitting(true);
+    setSubmitProgress(15);
+    setSubmitProgressStep('Memvalidasi format data input & otorisasi akun...');
+    await new Promise(r => setTimeout(r, 450));
+
+    setSubmitProgress(45);
+    setSubmitProgressStep('Memproses lampiran gambar & kompresi metadata...');
+    await new Promise(r => setTimeout(r, 400));
+
+    setSubmitProgress(75);
+    setSubmitProgressStep('Mengunggah & mensinkronisasikan transaksi baru ke Sheets...');
+
     let success = false;
     try {
       if (isEditing) {
@@ -404,23 +425,47 @@ export default function TransactionView({
         success = await onAddTransaction(txData);
       }
     } catch (err: any) {
+      setIsSubmitting(false);
       setFormError(err.message || 'Gagal menyimpan transaksi. Koneksi sistem bermasalah.');
       return;
     }
 
     if (success) {
+      setSubmitProgress(90);
+      setSubmitProgressStep('Mencatatkan ke riwayat log aktivitas sistem log...');
+      
       if (isEditing) {
         addActivityLog('EDIT_TRANSAKSI', `Mengubah Transaksi ${txId} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Proyek ${formProject} - Akun ${formAccount})`);
       } else {
         addActivityLog('TAMBAH_TRANSAKSI', `Menambahkan Transaksi ${txId} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Proyek ${formProject} - Akun ${formAccount})`);
       }
+      await new Promise(r => setTimeout(r, 350));
+
+      setSubmitProgress(100);
+      setSubmitProgressStep('Penyimpanan berhasil!');
       setSuccessMsg(isEditing ? 'Berhasil mengupdate transaksi!' : 'Berhasil menambahkan transaksi baru!');
+
+      // Trigger beautiful floating toast feedback (Notifikasi singkat berhasil)
+      setToast({
+        show: true,
+        message: isEditing ? 'Transaksi berhasil diperbarui!' : 'Transaksi baru berhasil dicatatkan!',
+        type: 'success',
+        txId: txId
+      });
+
+      // Auto dismiss toast after 4000ms
       setTimeout(() => {
+        setToast(prev => (prev?.txId === txId ? { ...prev, show: false } : prev));
+      }, 4000);
+
+      setTimeout(() => {
+        setIsSubmitting(false);
         setupFilteredPageCountAndReset();
         setShowForm(false);
         resetForm();
-      }, 1000);
+      }, 750);
     } else {
+      setIsSubmitting(false);
       setFormError('Terjadi kesalahan koneksi saat menginput data ke database.');
     }
   };
@@ -542,6 +587,48 @@ export default function TransactionView({
 
   return (
     <div id="transaction-view" className="space-y-6">
+      
+      {/* Dynamic Keyframe style for toast countdown bar */}
+      <style>{`
+        @keyframes toastShrink {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
+        .animate-toast-shrink {
+          animation: toastShrink 4s linear forwards;
+        }
+      `}</style>
+
+      {/* Floating Toast Notification (Notifikasi singkat berhasil) */}
+      {toast && toast.show && (
+        <div className="fixed top-20 right-6 z-55 max-w-sm w-full bg-white border-l-4 border-emerald-500 rounded-xl shadow-2xl p-4 flex items-start gap-3.5 animate-in fade-in slide-in-from-top-4 duration-300 relative overflow-hidden select-none">
+          {/* Animated active countdown bar */}
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
+            <div className="bg-emerald-500 h-full animate-toast-shrink" style={{ transformOrigin: 'left' }}></div>
+          </div>
+          
+          <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-100 shrink-0 text-emerald-600">
+            <Check className="w-5 h-5" />
+          </div>
+          <div className="space-y-1 pr-6 flex-1 font-semibold">
+            <h5 className="font-sans font-extrabold text-slate-800 text-[10px] uppercase tracking-wider">
+              SUKSES MENYIMPAN
+            </h5>
+            <p className="text-[11.5px] text-slate-500 font-bold leading-relaxed">
+              {toast.message}
+            </p>
+          </div>
+          
+          <button 
+            type="button"
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-slate-600 absolute top-3 right-3 p-1 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Tutup Notifikasi"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       
       {/* Header section with add button and roles */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -859,351 +946,424 @@ export default function TransactionView({
 
             <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden text-xs">
               
-              {/* Scrollable Form Area */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span className="font-semibold">{formError}</span>
-                  </div>
-                )}
-
-                {successMsg && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>{successMsg}</span>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3.5">
-                  {/* Date Picker */}
-                  <div>
-                    <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">TANGGAL TRANSAKSI</label>
-                    <input 
-                      type="date" 
-                      value={formDate}
-                      onChange={(e) => setFormDate(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
-                    />
-                  </div>
-
-                  {/* Project selector */}
-                  <div>
-                    <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">PROYEK TERKAIT</label>
-                    <select
-                      value={formProject}
-                      onChange={(e) => setFormProject(e.target.value as Project)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-bold text-slate-800"
-                    >
-                      {projectsList.map(proj => (
-                        <option key={proj.id} value={proj.name}>{proj.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3.5">
-                  {/* Transaction Type */}
-                  <div>
-                    <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">JENIS KREDIT/KAS</label>
-                    <select
-                      value={formType}
-                      onChange={(e) => setFormType(e.target.value as TransactionType)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-bold text-slate-700"
-                    >
-                      <option value="Outflow">Keluar (Pembelanjaan / Outflow)</option>
-                      <option value="Inflow">Masuk (Pendapatan / Inflow)</option>
-                    </select>
-                  </div>
-
-                  {/* Category Selection (Restricted if Pengelola) */}
-                  <div>
-                    <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">KATEGORI TRANSAKSI</label>
-                    <select
-                      value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value as FinancialCategory)}
-                      disabled={currentRole === 'Pengelola'}
-                      className={`w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium ${
-                        currentRole === 'Pengelola' ? 'opacity-85 cursor-not-allowed bg-slate-100' : ''
-                      }`}
-                    >
-                      <option value="Operational">Operasional Kebun</option>
-                      <option value="Non-Operational">Non-Operasional</option>
-                    </select>
-                    {currentRole === 'Pengelola' && (
-                      <span className="text-[10px] text-amber-600 block mt-1 font-semibold">
-                        *Role Pengelola terkunci hanya pada Operasional.
-                      </span>
+              {isSubmitting ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 text-center bg-white select-none">
+                  <div className="relative">
+                    {/* Ring loader */}
+                    <div className="w-16 h-16 rounded-full border-4 border-slate-100 border-t-emerald-500 animate-spin"></div>
+                    {submitProgress === 100 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white rounded-full">
+                        <Check className="w-8 h-8 text-emerald-500 animate-bounce" />
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Account / COA */}
-                <div>
-                  <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">AKUN KEUANGAN (COA)</label>
-                  <select
-                    value={formAccount}
-                    onChange={(e) => setFormAccount(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-bold text-slate-800"
-                    required
-                  >
-                    <option value="" disabled>-- Pilih Akun Keuangan --</option>
-                    {accountsList
-                      .filter(acc => {
-                        if (currentRole === 'Pengelola') {
-                          return acc.type === 'Project';
+                  <div className="space-y-3 max-w-xs w-full">
+                    <h4 className="font-display font-extrabold text-slate-800 text-sm">
+                      {isEditing ? 'Memperbarui Record Transaksi...' : 'Menyimpan Transaksi Baru...'}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-semibold animate-pulse">{submitProgressStep}</p>
+                    
+                    {/* Progress loadbar */}
+                    <div className="w-full bg-slate-105 h-2 rounded-full overflow-hidden mt-1 shadow-inner relative">
+                      <div 
+                        className="bg-indigo-600 h-full rounded-full transition-all duration-300 shadow-3xs"
+                        style={{ width: `${submitProgress}%` }}
+                      ></div>
+                    </div>
+                    <div className="text-[10px] text-indigo-600 font-mono font-bold text-right pt-0.5">
+                      {submitProgress}% Selesai
+                    </div>
+                  </div>
+
+                  {/* Checklist of steps */}
+                  <div className="w-full bg-slate-50 border border-slate-150 rounded-2xl p-4.5 text-left space-y-3 max-w-sm font-semibold">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${submitProgress >= 15 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-105 text-slate-400 border border-slate-205'}`}>
+                        {submitProgress > 15 ? '✓' : '1'}
+                      </span>
+                      <span className={`text-[11px] font-display font-bold ${submitProgress >= 15 ? 'text-slate-800' : 'text-slate-400'}`}>
+                        Verifikasi Kelayakan Form & Otorisasi
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${submitProgress >= 45 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-105 text-slate-400 border border-slate-205'}`}>
+                        {submitProgress > 45 ? '✓' : '2'}
+                      </span>
+                      <span className={`text-[11px] font-display font-bold ${submitProgress >= 45 ? 'text-slate-800' : 'text-slate-400'}`}>
+                        Enkripsi & Kompresi Bukti Lampiran
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${submitProgress >= 75 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-105 text-slate-400 border border-slate-205'}`}>
+                        {submitProgress > 75 ? '✓' : '3'}
+                      </span>
+                      <span className={`text-[11px] font-display font-bold ${submitProgress >= 75 ? 'text-slate-800' : 'text-slate-400'}`}>
+                        Mengirim Selisih Kas ke Sheets Database
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${submitProgress >= 90 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-105 text-slate-400 border border-slate-205'}`}>
+                        {submitProgress > 90 ? '✓' : '4'}
+                      </span>
+                      <span className={`text-[11px] font-display font-bold ${submitProgress >= 90 ? 'text-slate-800' : 'text-slate-400'}`}>
+                        Administrasi Log & Kebijakan Kas
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Scrollable Form Area */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    {formError && (
+                      <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span className="font-semibold">{formError}</span>
+                      </div>
+                    )}
+
+                    {successMsg && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{successMsg}</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3.5">
+                      {/* Date Picker */}
+                      <div>
+                        <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">TANGGAL TRANSAKSI</label>
+                        <input 
+                          type="date" 
+                          value={formDate}
+                          onChange={(e) => setFormDate(e.target.value)}
+                          required
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
+                        />
+                      </div>
+
+                      {/* Project selector */}
+                      <div>
+                        <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">PROYEK TERKAIT</label>
+                        <select
+                          value={formProject}
+                          onChange={(e) => setFormProject(e.target.value as Project)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-bold text-slate-800"
+                        >
+                          {projectsList.map(proj => (
+                            <option key={proj.id} value={proj.name}>{proj.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3.5">
+                      {/* Transaction Type */}
+                      <div>
+                        <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">JENIS KREDIT/KAS</label>
+                        <select
+                          value={formType}
+                          onChange={(e) => setFormType(e.target.value as TransactionType)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-bold text-slate-700"
+                        >
+                          <option value="Outflow">Keluar (Pembelanjaan / Outflow)</option>
+                          <option value="Inflow">Masuk (Pendapatan / Inflow)</option>
+                        </select>
+                      </div>
+
+                      {/* Category Selection (Restricted if Pengelola) */}
+                      <div>
+                        <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">KATEGORI TRANSAKSI</label>
+                        <select
+                          value={formCategory}
+                          onChange={(e) => setFormCategory(e.target.value as FinancialCategory)}
+                          disabled={currentRole === 'Pengelola'}
+                          className={`w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium ${
+                            currentRole === 'Pengelola' ? 'opacity-85 cursor-not-allowed bg-slate-100' : ''
+                          }`}
+                        >
+                          <option value="Operational">Operasional Kebun</option>
+                          <option value="Non-Operational">Non-Operasional</option>
+                        </select>
+                        {currentRole === 'Pengelola' && (
+                          <span className="text-[10px] text-amber-600 block mt-1 font-semibold">
+                            *Role Pengelola terkunci hanya pada Operasional.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Account / COA */}
+                    <div>
+                      <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">AKUN KEUANGAN (COA)</label>
+                      <select
+                        value={formAccount}
+                        onChange={(e) => setFormAccount(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-bold text-slate-800"
+                        required
+                      >
+                        <option value="" disabled>-- Pilih Akun Keuangan --</option>
+                        {accountsList
+                          .filter(acc => {
+                            if (currentRole === 'Pengelola') {
+                              return acc.type === 'Project';
+                            }
+                            return true;
+                          })
+                          .map(acc => (
+                            <option key={acc.id} value={acc.name}>
+                              {acc.name} ({acc.type === 'Project' ? 'Project / Operasional' : 'All / Non-Project'})
+                            </option>
+                          ))
                         }
-                        return true;
-                      })
-                      .map(acc => (
-                        <option key={acc.id} value={acc.name}>
-                          {acc.name} ({acc.type === 'Project' ? 'Project / Operasional' : 'All / Non-Project'})
-                        </option>
-                      ))
-                    }
-                  </select>
-                  {currentRole === 'Pengelola' && (
-                    <span className="text-[10px] text-amber-650 block mt-1">
-                      *Sebagai Pengelola, Anda hanya diizinkan mengakses Akun tipe Project.
-                    </span>
-                  )}
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">NOMINAL (RUPIAH)</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-3 flex items-center font-bold text-slate-400">Rp</span>
-                    <input 
-                      type="text" 
-                      placeholder="Masukkan nominal angka (cth: 15.000.000)..." 
-                      value={formAmount !== '' ? formAmount.toLocaleString('id-ID') : ''}
-                      onChange={(e) => {
-                        const cleanStr = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-                        setFormAmount(cleanStr !== '' ? parseInt(cleanStr, 10) : '');
-                      }}
-                      required
-                      className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white font-mono font-bold text-xs"
-                    />
-                  </div>
-                  {formAmount !== '' && (
-                    <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
-                      Terbilang: Rp {formAmount.toLocaleString('id-ID')}
-                    </span>
-                  )}
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">KETERANGAN & DESKRIPSI</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Contoh: Pembelian pupuk AB Mix, Penjualan kelinci hias, dll..."
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
-                  />
-                </div>
-
-                {/* Bukti Transaksi (File upload with drag & drop or direct camera capture) */}
-                <div className="space-y-1.5 pt-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-slate-500 font-semibold uppercase text-[10px]">
-                      LAMPIRAN BUKTI GAMBAR / NOTA {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && <span className="text-rose-600 font-extrabold">*Wajib</span>}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      {!formImage && !showCamera && (
-                        <button
-                          type="button"
-                          onClick={() => startCamera(activeFacingMode)}
-                          className="text-[10px] text-emerald-700 hover:text-emerald-850 bg-emerald-50 hover:bg-emerald-100 border border-emerald-150 px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-3xs"
-                        >
-                          <Camera className="w-3 h-3" /> Ambil dari Kamera
-                        </button>
+                      </select>
+                      {currentRole === 'Pengelola' && (
+                        <span className="text-[10px] text-amber-655 block mt-1 font-semibold">
+                          *Sebagai Pengelola, Anda hanya diizinkan mengakses Akun tipe Project.
+                        </span>
                       )}
-                      {formImage && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormImage('');
-                            stopCamera();
+                    </div>
+
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">NOMINAL (RUPIAH)</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-3 flex items-center font-bold text-slate-400">Rp</span>
+                        <input 
+                          type="text" 
+                          placeholder="Masukkan nominal angka (cth: 15.000.000)..." 
+                          value={formAmount !== '' ? formAmount.toLocaleString('id-ID') : ''}
+                          onChange={(e) => {
+                            const cleanStr = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+                            setFormAmount(cleanStr !== '' ? parseInt(cleanStr, 15) : '');
                           }}
-                          className="text-[10px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
-                        >
-                          <Trash2 className="w-3 h-3" /> Hapus File
-                        </button>
+                          required
+                          className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white font-mono font-bold text-xs"
+                        />
+                      </div>
+                      {formAmount !== '' && (
+                        <span className="text-[10px] text-emerald-600 font-semibold block mt-1">
+                          Terbilang: Rp {formAmount.toLocaleString('id-ID')}
+                        </span>
                       )}
                     </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">KETERANGAN & DESKRIPSI</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Contoh: Pembelian pupuk AB Mix, Penjualan kelinci hias, dll..."
+                        value={formDescription}
+                        onChange={(e) => setFormDescription(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
+                      />
+                    </div>
+
+                    {/* Bukti Transaksi (File upload with drag & drop or direct camera capture) */}
+                    <div className="space-y-1.5 pt-1.5">
+                      <div className="flex justify-between items-center">
+                        <label className="block text-slate-500 font-semibold uppercase text-[10px]">
+                          LAMPIRAN BUKTI GAMBAR / NOTA {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && <span className="text-rose-600 font-extrabold">*Wajib</span>}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          {!formImage && !showCamera && (
+                            <button
+                              type="button"
+                              onClick={() => startCamera(activeFacingMode)}
+                              className="text-[10px] text-emerald-700 hover:text-emerald-850 bg-emerald-50 hover:bg-emerald-100 border border-emerald-150 px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-3xs"
+                            >
+                              <Camera className="w-3 h-3" /> Ambil dari Kamera
+                            </button>
+                          )}
+                          {formImage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormImage('');
+                                stopCamera();
+                              }}
+                              className="text-[10px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" /> Hapus File
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {showCamera ? (
+                        <div className="border border-slate-200 rounded-2xl p-3 bg-slate-950 flex flex-col items-center justify-center gap-3 overflow-hidden shadow-xs relative min-h-[220px]">
+                          {cameraError ? (
+                            <div className="text-center p-4 text-white flex flex-col items-center justify-center gap-2">
+                              <VideoOff className="w-8 h-8 text-rose-500" />
+                              <span className="text-xs font-semibold">{cameraError}</span>
+                              <button
+                                type="button"
+                                onClick={stopCamera}
+                                className="mt-2 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-lg text-[10px] cursor-pointer"
+                              >
+                                Gunakan Upload File Biasa
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="relative w-full aspect-video md:max-h-48 bg-black rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
+                                <video
+                                  ref={videoRef}
+                                  autoPlay
+                                  playsInline
+                                  muted
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                                {/* Viewfinder Target Border Overlay */}
+                                <div className="absolute inset-4 border border-white/20 rounded-lg pointer-events-none flex items-center justify-center">
+                                  <div className="w-8 h-8 border-t-2 border-l-2 border-emerald-500 absolute top-2 left-2" />
+                                  <div className="w-8 h-8 border-t-2 border-r-2 border-emerald-500 absolute top-2 right-2" />
+                                  <div className="w-8 h-8 border-b-2 border-l-2 border-emerald-500 absolute bottom-2 left-2" />
+                                  <div className="w-8 h-8 border-b-2 border-r-2 border-emerald-500 absolute bottom-2 right-2" />
+                                  {/* Scanning line indicator */}
+                                  <div className="w-full h-0.5 bg-emerald-500/30 absolute top-1/2 left-0 animate-pulse" />
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 w-full justify-center">
+                                <button
+                                  type="button"
+                                  onClick={capturePhoto}
+                                  disabled={compressing}
+                                  className="flex items-center justify-center gap-1.5 px-4.5 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white font-extrabold rounded-xl text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                  <Camera className="w-4 h-4" />
+                                  <span>Ambil Foto</span>
+                                </button>
+                                
+                                <button
+                                  type="button"
+                                  onClick={toggleCameraFacing}
+                                  className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold rounded-xl text-[11px] transition-all cursor-pointer"
+                                  title="Ganti kamera depan / belakang"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                  <span>Putar</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={stopCamera}
+                                  className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl text-[11px] transition-all cursor-pointer"
+                                >
+                                  <span>Batal</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : formImage ? (
+                        <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 h-32 flex items-center justify-center group shadow-2xs">
+                          <img 
+                            src={formImage} 
+                            alt="Preview Bukti" 
+                            className="h-full object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setLightboxImage(formImage)}
+                              className="px-3 py-1.5 bg-white font-bold text-slate-900 rounded-lg text-[10px] hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                            >
+                              Tinjau Bukti
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDragging(true);
+                          }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragging(false);
+                            const file = e.dataTransfer.files?.[0];
+                            if (file) handleImageFile(file);
+                          }}
+                          onClick={() => document.getElementById('evidence-file-input')?.click()}
+                          className={`border-2 border-dashed rounded-2xl p-5 text-center flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
+                            isDragging 
+                              ? 'border-slate-900 bg-slate-55' 
+                              : 'border-slate-200 bg-slate-50/60 hover:bg-slate-55'
+                          }`}
+                        >
+                          <input 
+                            type="file" 
+                            id="evidence-file-input"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleImageFile(file);
+                            }}
+                            className="hidden"
+                          />
+                          {compressing ? (
+                            <Loader2 className="w-5 h-5 text-slate-900 animate-spin" />
+                          ) : (
+                            <div className="p-2 bg-white border border-slate-100 rounded-xl shadow-3xs text-slate-400 shrink-0">
+                              <Plus className="w-4 h-4 text-slate-500" />
+                            </div>
+                          )}
+                          <div className="space-y-0.5 pointer-events-none">
+                            <span className="text-xs font-bold text-slate-900 block">
+                              {compressing ? 'Menyusutkan & Memproses Gambar...' : 'Unggah foto nota, atau seret file ke sini'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block font-medium">
+                              File Gambar PNG, JPG, JPEG (Maksimal 5MB)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && !formImage && (
+                        <p className="text-[10px] text-rose-600 flex items-center gap-1 font-semibold">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Unggah foto bukti nota wajib untuk jenis transaksi ini.
+                        </p>
+                      )}
+                    </div>
+
                   </div>
 
-                  {showCamera ? (
-                    <div className="border border-slate-200 rounded-2xl p-3 bg-slate-950 flex flex-col items-center justify-center gap-3 overflow-hidden shadow-xs relative min-h-[220px]">
-                      {cameraError ? (
-                        <div className="text-center p-4 text-white flex flex-col items-center justify-center gap-2">
-                          <VideoOff className="w-8 h-8 text-rose-500" />
-                          <span className="text-xs font-semibold">{cameraError}</span>
-                          <button
-                            type="button"
-                            onClick={stopCamera}
-                            className="mt-2 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-lg text-[10px] cursor-pointer"
-                          >
-                            Gunakan Upload File Biasa
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="relative w-full aspect-video md:max-h-48 bg-black rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
-                            <video
-                              ref={videoRef}
-                              autoPlay
-                              playsInline
-                              muted
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            {/* Viewfinder Target Border Overlay */}
-                            <div className="absolute inset-4 border border-white/20 rounded-lg pointer-events-none flex items-center justify-center">
-                              <div className="w-8 h-8 border-t-2 border-l-2 border-emerald-500 absolute top-2 left-2" />
-                              <div className="w-8 h-8 border-t-2 border-r-2 border-emerald-500 absolute top-2 right-2" />
-                              <div className="w-8 h-8 border-b-2 border-l-2 border-emerald-500 absolute bottom-2 left-2" />
-                              <div className="w-8 h-8 border-b-2 border-r-2 border-emerald-500 absolute bottom-2 right-2" />
-                              {/* Scanning line indicator */}
-                              <div className="w-full h-0.5 bg-emerald-500/30 absolute top-1/2 left-0 animate-pulse" />
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 w-full justify-center">
-                            <button
-                              type="button"
-                              onClick={capturePhoto}
-                              disabled={compressing}
-                              className="flex items-center justify-center gap-1.5 px-4.5 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white font-extrabold rounded-xl text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
-                            >
-                              <Camera className="w-4 h-4" />
-                              <span>Ambil Foto</span>
-                            </button>
-                            
-                            <button
-                              type="button"
-                              onClick={toggleCameraFacing}
-                              className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-bold rounded-xl text-[11px] transition-all cursor-pointer"
-                              title="Ganti kamera depan / belakang"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                              <span>Putar</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={stopCamera}
-                              className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl text-[11px] transition-all cursor-pointer"
-                            >
-                              <span>Batal</span>
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ) : formImage ? (
-                    <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 h-32 flex items-center justify-center group shadow-2xs">
-                      <img 
-                        src={formImage} 
-                        alt="Preview Bukti" 
-                        className="h-full object-contain"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setLightboxImage(formImage)}
-                          className="px-3 py-1.5 bg-white font-bold text-slate-900 rounded-lg text-[10px] hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
-                        >
-                          Tinjau Bukti
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsDragging(true);
-                      }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDragging(false);
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) handleImageFile(file);
-                      }}
-                      onClick={() => document.getElementById('evidence-file-input')?.click()}
-                      className={`border-2 border-dashed rounded-2xl p-5 text-center flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-                        isDragging 
-                          ? 'border-slate-900 bg-slate-55' 
-                          : 'border-slate-200 bg-slate-50/60 hover:bg-slate-55'
-                      }`}
+                  {/* Sticky Footer */}
+                  <div className="flex gap-2.5 justify-end p-4 bg-slate-50 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={handleCloseForm}
+                      className="px-4 py-2 border border-slate-250 bg-white rounded-xl text-slate-655 hover:bg-slate-50 transition-colors font-semibold shadow-3xs text-xs cursor-pointer"
                     >
-                      <input 
-                        type="file" 
-                        id="evidence-file-input"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleImageFile(file);
-                        }}
-                        className="hidden"
-                      />
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={compressing}
+                      className="px-5 py-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center gap-1 transition-colors text-xs cursor-pointer"
+                    >
                       {compressing ? (
-                        <Loader2 className="w-5 h-5 text-slate-900 animate-spin" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <div className="p-2 bg-white border border-slate-100 rounded-xl shadow-3xs text-slate-400 shrink-0">
-                          <Plus className="w-4 h-4 text-slate-500" />
-                        </div>
+                        <Save className="w-3.5 h-3.5" />
                       )}
-                      <div className="space-y-0.5 pointer-events-none">
-                        <span className="text-xs font-bold text-slate-900 block">
-                          {compressing ? 'Menyusutkan & Memproses Gambar...' : 'Unggah foto nota, atau seret file ke sini'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block font-medium">
-                          File Gambar PNG, JPG, JPEG (Maksimal 5MB)
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && !formImage && (
-                    <p className="text-[10px] text-rose-600 flex items-center gap-1 font-semibold">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Unggah foto bukti nota wajib untuk jenis transaksi ini.
-                    </p>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Sticky Footer */}
-              <div className="flex gap-2.5 justify-end p-4 bg-slate-50 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={handleCloseForm}
-                  className="px-4 py-2 border border-slate-250 bg-white rounded-xl text-slate-655 hover:bg-slate-50 transition-colors font-semibold shadow-3xs text-xs cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={compressing}
-                  className="px-5 py-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center gap-1 transition-colors text-xs cursor-pointer"
-                >
-                  {compressing ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Save className="w-3.5 h-3.5" />
-                  )}
-                  {isEditing ? 'Perbarui Data' : 'Simpan Transaksi'}
-                </button>
-              </div>
+                      {isEditing ? 'Perbarui Data' : 'Simpan Transaksi'}
+                    </button>
+                  </div>
+                </>
+              )}
 
             </form>
           </div>
