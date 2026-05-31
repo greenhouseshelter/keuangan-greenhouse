@@ -91,7 +91,7 @@ const formatThousand = (val: string): string => {
   return parseInt(clean, 10).toLocaleString('id-ID');
 };
 
-// Custom Indonesian Date Picker element using transparent native picker overlay
+// Beautiful native date picker styled with Tailwind for high iframe compatibility
 const IndonesianDatePicker = ({ 
   value, 
   onChange, 
@@ -105,41 +105,43 @@ const IndonesianDatePicker = ({
   placeholder?: string;
   inputClassName?: string;
 }) => {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const hasBorder = inputClassName.includes('border');
+  const hasBg = inputClassName.includes('bg-');
+  const hasRounded = inputClassName.includes('rounded-');
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (inputRef.current) {
-      if (typeof inputRef.current.showPicker === 'function') {
-        try {
-          inputRef.current.showPicker();
-        } catch (err) {
-          console.warn('Native showPicker failed, relying on default behavior', err);
-        }
-      } else {
-        inputRef.current.click();
-      }
-    }
-  };
+  const baseThemeClasses = `${hasBorder ? '' : 'border border-slate-200'} ${hasBg ? '' : 'bg-slate-50'} ${hasRounded ? '' : 'rounded-xl'} text-slate-800`;
 
   return (
-    <div 
-      className={`relative group cursor-pointer ${className}`}
-      onClick={handleClick}
-    >
-      <div className={`w-full border border-slate-200 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-between group-hover:border-slate-350 transition-colors ${inputClassName}`}>
-        <span className={value ? 'text-slate-800 font-semibold' : 'text-slate-400 font-normal'}>
+    <div className={`relative inline-block w-full ${className}`}>
+      {/* Dynamic style tag to stretch webkit calendar picker indicator completely, ensuring reliable click targets */}
+      <style>{`
+        .custom-native-date-input::-webkit-calendar-picker-indicator {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          height: 100%;
+          opacity: 0;
+          cursor: pointer;
+        }
+      `}</style>
+
+      {/* Visual representation styled in ID format */}
+      <div className={`w-full flex items-center justify-between transition-colors pointer-events-none ${baseThemeClasses} ${inputClassName}`}>
+        <span className={`${value ? 'text-slate-800 font-semibold' : 'text-slate-400 font-normal'} truncate`}>
           {value ? formatIndonesianDate(value) : placeholder}
         </span>
-        <Calendar className="w-3.5 h-3.5 text-slate-450 group-hover:text-slate-650 transition-colors ml-1 shrink-0" />
+        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
       </div>
+
+      {/* Hidden native input covering the relative box area entirely with webkit stretching */}
       <input 
-        ref={inputRef}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+        className="custom-native-date-input absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
       />
     </div>
   );
