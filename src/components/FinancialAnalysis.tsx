@@ -60,7 +60,11 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
         let errorMessage = 'Gagal memanggil asisten analitik API.';
         try {
           const errJson = JSON.parse(text);
-          errorMessage = errJson.error || errJson.details || errorMessage;
+          if (errJson.details) {
+            errorMessage = `${errJson.error || 'Gagal melakukan analisis'}: ${errJson.details}`;
+          } else {
+            errorMessage = errJson.error || errorMessage;
+          }
         } catch (e) {
           if (text.includes('GEMINI_API_KEY') || text.includes('not set') || text.includes('Secrets')) {
             errorMessage = 'API Key Gemini (GEMINI_API_KEY) belum dikonfigurasi. Silakan masuk ke panel "Settings" > "Secrets" di AI Studio, tambahkan variabel "GEMINI_API_KEY" dengan value kunci API Gemini Anda.';

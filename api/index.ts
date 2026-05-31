@@ -72,7 +72,7 @@ function getAiClient(): GoogleGenAI {
       throw new Error('GEMINI_API_KEY is required but not set in environment secrets.');
     }
     aiClient = new GoogleGenAI({
-      apiKey,
+      apiKey: apiKey.trim(),
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -245,7 +245,7 @@ app.post('/api/analyze', async (req, res): Promise<any> => {
     });
 
     const recentList = transactions.slice(0, 10).map((t: any) => 
-      `- [${t.date}] Proyek: ${t.project} | Tipe: ${t.type} | Kategori: ${t.category} | Jumlah: Rp ${t.amount.toLocaleString('id-ID')} | Ket: ${t.description}`
+      `- [${t.date}] Proyek: ${t.project} | Tipe: ${t.type} | Kategori: ${t.category} | Jumlah: Rp ${Number(t.amount || 0).toLocaleString('id-ID')} | Ket: ${t.description || ''}`
     ).join('\n');
 
     const prompt = `Anda adalah konsultan keuangan agribisnis dan akuntan profesional untuk Greenhouse terintegrasi (greenhouse modern yang mengelola komoditas Melon, Cabe, Perikanan, dan Ternak).
@@ -292,12 +292,33 @@ Struktur Laporan harus mencakup:
 Tulis laporan yang kaya informasi, bernada optimis namun objektif, serta memberikan wawasan agribisnis mendalam yang bernilai tinggi bagi pemilik modal.`;
 
     const ai = getAiClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-    });
+    const modelsToTry = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+    let analysisText = '';
+    let lastError: any = null;
 
-    res.json({ analysis: response.text });
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`Mencoba membuat analisis keuangan menggunakan model: ${modelName}`);
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+        });
+        if (response && response.text) {
+          analysisText = response.text;
+          console.log(`Analisis Keuangan berhasil dibuat menggunakan model: ${modelName}`);
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Model ${modelName} gagal:`, err.message || err);
+        lastError = err;
+      }
+    }
+
+    if (!analysisText) {
+      throw lastError || new Error('Tidak ada respon teks yang diperoleh dari model AI.');
+    }
+
+    res.json({ analysis: analysisText });
   } catch (error: any) {
     console.error('API Analyze error:', error);
     res.status(500).json({ 
