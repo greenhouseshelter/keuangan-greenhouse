@@ -6,7 +6,7 @@ import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
   Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2,
-  Camera, VideoOff, RefreshCw, Calendar
+  Camera, VideoOff, RefreshCw, Calendar, Database
 } from 'lucide-react';
 
 interface TransactionViewProps {
@@ -327,7 +327,7 @@ export default function TransactionView({
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState<number | 'semua'>('semua');
 
   // Form states
   const [showForm, setShowForm] = useState(false);
@@ -880,9 +880,10 @@ export default function TransactionView({
 
   const sortedList = getFilteredList();
 
-  const totalPages = Math.ceil(sortedList.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const activeLimit = itemsPerPage === 'semua' ? sortedList.length : itemsPerPage;
+  const totalPages = activeLimit > 0 ? Math.ceil(sortedList.length / activeLimit) : 1;
+  const indexOfLastItem = currentPage * activeLimit;
+  const indexOfFirstItem = indexOfLastItem - activeLimit;
   const currentItems = sortedList.slice(indexOfFirstItem, indexOfLastItem);
 
   return (
@@ -1077,6 +1078,47 @@ export default function TransactionView({
 
       {/* Main Table view */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        {/* Table Control and Limit Settings */}
+        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-slate-500" />
+            <span className="font-display font-medium text-slate-800 text-[11px] sm:text-[11.5px] tracking-wider uppercase">
+              Daftar Pencatatan Transaksi
+            </span>
+            <span className="px-2 py-0.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold font-mono">
+              {sortedList.length} Total
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold text-[11px]">Batas Tampilan:</span>
+            <div className="inline-flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 shadow-3xs">
+              {(['10', '100', 'semua'] as const).map((opt) => {
+                const isActive = 
+                  (opt === 'semua' && itemsPerPage === 'semua') || 
+                  (opt !== 'semua' && itemsPerPage === Number(opt));
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => {
+                      setItemsPerPage(opt === 'semua' ? 'semua' : Number(opt));
+                      setCurrentPage(1);
+                    }}
+                    className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                      isActive 
+                        ? 'bg-white text-slate-900 shadow-3xs border border-slate-100' 
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {opt === 'semua' ? 'Semua' : opt}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1284,8 +1326,8 @@ export default function TransactionView({
                       <td className="py-4 px-4 text-right font-mono font-bold text-rose-600">
                         {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
                       </td>
-                      <td className="py-4 px-4 text-slate-600" title={t.description}>
-                        <span className="line-clamp-1 max-w-xs">{t.description}</span>
+                      <td className="py-4 px-4 text-slate-600 max-w-xs break-words whitespace-normal" title={t.description}>
+                        <span>{t.description}</span>
                       </td>
                       <td className="py-4 px-4 font-medium text-slate-500 text-[11px]">
                         <span className="px-2 py-0.5 bg-slate-50 rounded-full border border-slate-105 text-slate-600 font-mono capitalize">

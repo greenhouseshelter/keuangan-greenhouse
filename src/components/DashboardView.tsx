@@ -432,8 +432,8 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
                     <td className="py-3.5 px-4 text-right font-mono font-bold text-rose-600">
                       {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
                     </td>
-                    <td className="py-3.5 px-4 text-slate-500" title={t.description}>
-                      <span className="line-clamp-1 max-w-xs">{t.description}</span>
+                    <td className="py-3.5 px-4 text-slate-500 max-w-xs break-words whitespace-normal" title={t.description}>
+                      <span>{t.description}</span>
                     </td>
                   </tr>
                 ))}
