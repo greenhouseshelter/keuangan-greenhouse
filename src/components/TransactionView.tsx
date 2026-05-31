@@ -6,7 +6,7 @@ import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
   Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2,
-  Camera, VideoOff, RefreshCw
+  Camera, VideoOff, RefreshCw, Calendar
 } from 'lucide-react';
 
 interface TransactionViewProps {
@@ -84,6 +84,38 @@ const formatIndonesianDate = (dateStr: string): string => {
   return `${day}-${monthName}-${year}`;
 };
 
+// Custom Indonesian Date Picker element using transparent native picker overlay
+const IndonesianDatePicker = ({ 
+  value, 
+  onChange, 
+  className = '', 
+  placeholder = 'Pilih Tanggal',
+  inputClassName = 'px-3 py-2 text-xs font-medium'
+}: { 
+  value: string; 
+  onChange: (val: string) => void; 
+  className?: string; 
+  placeholder?: string;
+  inputClassName?: string;
+}) => {
+  return (
+    <div className={`relative group ${className}`}>
+      <div className={`w-full border border-slate-200 rounded-xl bg-slate-50 text-slate-700 flex items-center justify-between group-hover:border-slate-350 transition-colors ${inputClassName}`}>
+        <span className={value ? 'text-slate-800 font-semibold' : 'text-slate-400 font-normal'}>
+          {value ? formatIndonesianDate(value) : placeholder}
+        </span>
+        <Calendar className="w-3.5 h-3.5 text-slate-450 group-hover:text-slate-650 transition-colors ml-1 shrink-0" />
+      </div>
+      <input 
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+      />
+    </div>
+  );
+};
+
 export default function TransactionView({ 
   transactions, 
   currentRole, 
@@ -100,6 +132,22 @@ export default function TransactionView({
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'All'>(initialFilter?.type || 'All');
   const [categoryFilter, setCategoryFilter] = useState<FinancialCategory | 'All'>('All');
   const [accountFilter, setAccountFilter] = useState<string | 'All'>('All');
+  
+  // Multi-column sorting and filtering states
+  const [sortCriteria, setSortCriteria] = useState<Array<{ column: string; direction: 'asc' | 'desc' }>>([
+    { column: 'date', direction: 'desc' }
+  ]);
+  const [colFilters, setColFilters] = useState({
+    startDate: '',
+    endDate: '',
+    project: 'All',
+    category: 'All',
+    account: 'All',
+    inflow: '',
+    outflow: '',
+    description: '',
+    recordedBy: ''
+  });
   
   // Settings & attachment upload states
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({ imageRequiredIn: false, imageRequiredOut: false });
@@ -564,7 +612,71 @@ export default function TransactionView({
     setCurrentPage(1);
   };
 
-  // Process filter logic
+  const handleToggleSort = (column: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const isShift = e.shiftKey;
+    setSortCriteria(prev => {
+      const existingIdx = prev.findIndex(item => item.column === column);
+      if (existingIdx > -1) {
+        const item = prev[existingIdx];
+        if (item.direction === 'asc') {
+          if (isShift) {
+            const updated = [...prev];
+            updated[existingIdx] = { column, direction: 'desc' };
+            return updated;
+          } else {
+            return [{ column, direction: 'desc' }];
+          }
+        } else {
+          if (isShift) {
+            return prev.filter(p => p.column !== column);
+          } else {
+            return [];
+          }
+        }
+      } else {
+        if (isShift) {
+          return [...prev, { column, direction: 'asc' }];
+        } else {
+          return [{ column, direction: 'asc' }];
+        }
+      }
+    });
+    setupFilteredPageCountAndReset();
+  };
+
+  const handleColFilterChange = (key: keyof typeof colFilters, value: string) => {
+    setColFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+    setupFilteredPageCountAndReset();
+  };
+
+  const handleResetFiltersAndSorts = () => {
+    setColFilters({
+      startDate: '',
+      endDate: '',
+      project: 'All',
+      category: 'All',
+      account: 'All',
+      inflow: '',
+      outflow: '',
+      description: '',
+      recordedBy: ''
+    });
+    setSortCriteria([
+      { column: 'date', direction: 'desc' }
+    ]);
+    setSearchTerm('');
+    setProjectFilter('All');
+    setTypeFilter('All');
+    setCategoryFilter('All');
+    setAccountFilter('All');
+    setupFilteredPageCountAndReset();
+  };
+
+  // Process filter logic & multi-column sorting
   const getFilteredList = () => {
     let list = [...transactions];
 
@@ -592,12 +704,140 @@ export default function TransactionView({
     if (accountFilter !== 'All') {
       list = list.filter(t => t.account === accountFilter);
     }
-    
+
+    // --- Multi-Column Individual Filters ---
+    if (colFilters.startDate || colFilters.endDate) {
+      list = list.filter(t => {
+        if (!t.date) return false;
+        const normalizedTxDate = t.date.split(/[T\s]/)[0]; // "YYYY-MM-DD"
+        if (colFilters.startDate) {
+          if (normalizedTxDate < colFilters.startDate) return false;
+        }
+        if (colFilters.endDate) {
+          if (normalizedTxDate > colFilters.endDate) return false;
+        }
+        return true;
+      });
+    }
+
+    if (colFilters.project !== 'All') {
+      list = list.filter(t => t.project === colFilters.project);
+    }
+
+    if (colFilters.category !== 'All') {
+      list = list.filter(t => t.category === colFilters.category);
+    }
+
+    if (colFilters.account !== 'All') {
+      list = list.filter(t => t.account === colFilters.account);
+    }
+
+    if (colFilters.inflow.trim()) {
+      const q = colFilters.inflow.replace(/\./g, '');
+      list = list.filter(t => t.type === 'Inflow' && t.amount.toString().includes(q));
+    }
+
+    if (colFilters.outflow.trim()) {
+      const q = colFilters.outflow.replace(/\./g, '');
+      list = list.filter(t => t.type === 'Outflow' && t.amount.toString().includes(q));
+    }
+
+    if (colFilters.description.trim()) {
+      const q = colFilters.description.toLowerCase();
+      list = list.filter(t => t.description.toLowerCase().includes(q));
+    }
+
+    if (colFilters.recordedBy.trim()) {
+      const q = colFilters.recordedBy.toLowerCase();
+      list = list.filter(t => t.recordedBy.toLowerCase().includes(q));
+    }
+
+    // --- Multi-Column Sort logic ---
+    if (sortCriteria.length > 0) {
+      list.sort((a, b) => {
+        for (const crit of sortCriteria) {
+          const { column, direction } = crit;
+          let valA: any = '';
+          let valB: any = '';
+
+          if (column === 'date') {
+            valA = a.date || '';
+            valB = b.date || '';
+          } else if (column === 'project') {
+            valA = a.project || '';
+            valB = b.project || '';
+          } else if (column === 'category') {
+            valA = a.category || '';
+            valB = b.category || '';
+          } else if (column === 'account') {
+            valA = a.account || '';
+            valB = b.account || '';
+          } else if (column === 'inflow') {
+            valA = a.type === 'Inflow' ? a.amount : -1;
+            valB = b.type === 'Inflow' ? b.amount : -1;
+          } else if (column === 'outflow') {
+            valA = a.type === 'Outflow' ? a.amount : -1;
+            valB = b.type === 'Outflow' ? b.amount : -1;
+          } else if (column === 'description') {
+            valA = a.description || '';
+            valB = b.description || '';
+          } else if (column === 'recordedBy') {
+            valA = a.recordedBy || '';
+            valB = b.recordedBy || '';
+          } else {
+            valA = (a as any)[column] || '';
+            valB = (b as any)[column] || '';
+          }
+
+          let cmp = 0;
+          if (typeof valA === 'number' && typeof valB === 'number') {
+            cmp = valA - valB;
+          } else {
+            cmp = String(valA).localeCompare(String(valB), 'id', { numeric: true, sensitivity: 'base' });
+          }
+
+          if (cmp !== 0) {
+            return direction === 'asc' ? cmp : -cmp;
+          }
+        }
+        return 0;
+      });
+    }
+
     return list;
   };
 
-  const filteredList = getFilteredList();
-  const sortedList = filteredList.sort((a, b) => b.date.localeCompare(a.date));
+  const renderSortableHeader = (column: string, label: string, className = '') => {
+    const existingIdx = sortCriteria.findIndex(item => item.column === column);
+    const isSorted = existingIdx > -1;
+    const item = isSorted ? sortCriteria[existingIdx] : null;
+
+    return (
+      <th className={`py-3 px-4 group select-none ${className}`}>
+        <div 
+          onClick={(e) => handleToggleSort(column, e)}
+          className="flex items-center gap-1.5 cursor-pointer hover:text-slate-800 transition-colors"
+          title="Klik untuk mengurutkan (Shift + Klik untuk gabungan multi-kolom)"
+        >
+          <span className="font-semibold text-[10px] tracking-wider uppercase font-display">{label}</span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-450">
+            {isSorted && (
+              <span className="px-1 text-emerald-700 bg-emerald-50 rounded border border-emerald-200 text-[8.5px] font-extrabold font-mono">
+                {existingIdx + 1}
+              </span>
+            )}
+            {item ? (
+              <span className="font-extrabold text-slate-650 font-sans">{item.direction === 'asc' ? '▲' : '▼'}</span>
+            ) : (
+              <span className="opacity-0 group-hover:opacity-75 transition-all text-slate-350">▲▼</span>
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
+  const sortedList = getFilteredList();
 
   const totalPages = Math.ceil(sortedList.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -754,21 +994,21 @@ export default function TransactionView({
             </span>
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-405 font-bold uppercase">Mulai</span>
-                <input 
-                  type="date"
+                <span className="text-[10px] text-slate-405 font-bold uppercase shrink-0">Mulai</span>
+                <IndonesianDatePicker 
                   value={downloadStartDate}
-                  onChange={(e) => setDownloadStartDate(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2.5 py-1 font-mono text-[11px] bg-slate-50 focus:outline-none focus:bg-white text-slate-700 font-semibold"
+                  onChange={setDownloadStartDate}
+                  className="w-[125px]"
+                  inputClassName="px-2.5 py-1 text-[11px] font-semibold text-slate-700 rounded-lg"
                 />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-405 font-bold uppercase">Sampai</span>
-                <input 
-                  type="date"
+                <span className="text-[10px] text-slate-405 font-bold uppercase shrink-0">Sampai</span>
+                <IndonesianDatePicker 
                   value={downloadEndDate}
-                  onChange={(e) => setDownloadEndDate(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2.5 py-1 font-mono text-[11px] bg-slate-50 focus:outline-none focus:bg-white text-slate-700 font-semibold"
+                  onChange={setDownloadEndDate}
+                  className="w-[125px]"
+                  inputClassName="px-2.5 py-1 text-[11px] font-semibold text-slate-700 rounded-lg"
                 />
               </div>
             </div>
@@ -800,17 +1040,127 @@ export default function TransactionView({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-semibold text-slate-500 uppercase tracking-wider font-display">
-                <th className="py-3 px-4 text-center w-12">No.</th>
-                <th className="py-3 px-4">Tanggal</th>
-                <th className="py-3 px-4">Proyek</th>
-                <th className="py-3 px-4">Kategori</th>
-                <th className="py-3 px-4">Akun (COA)</th>
-                <th className="py-3 px-4 text-right">Uang Masuk</th>
-                <th className="py-3 px-4 text-right">Uang Keluar</th>
-                <th className="py-3 px-4">Keterangan</th>
-                <th className="py-3 px-4">Dicatat Oleh</th>
-                <th className="py-3 px-4 text-center font-semibold">Bukti</th>
-                <th className="py-3 px-4 text-center">Aksi</th>
+                <th className="py-3 px-4 text-center w-12 text-[10px] uppercase">No.</th>
+                {renderSortableHeader('date', 'Tanggal')}
+                {renderSortableHeader('project', 'Proyek')}
+                {renderSortableHeader('category', 'Kategori')}
+                {renderSortableHeader('account', 'Akun (COA)')}
+                {renderSortableHeader('inflow', 'Uang Masuk', 'text-right')}
+                {renderSortableHeader('outflow', 'Uang Keluar', 'text-right')}
+                {renderSortableHeader('description', 'Keterangan')}
+                {renderSortableHeader('recordedBy', 'Dicatat Oleh')}
+                <th className="py-3 px-4 text-center font-semibold text-[10px] tracking-wider uppercase font-display">Bukti</th>
+                <th className="py-3 px-4 text-center text-[10px] tracking-wider uppercase font-display">Aksi</th>
+              </tr>
+              {/* Row for multi-column individual filtering */}
+              <tr className="bg-slate-100/50 border-b border-slate-200">
+                <td className="py-2 px-2 text-center">
+                  <button
+                    type="button"
+                    onClick={handleResetFiltersAndSorts}
+                    className="p-1 px-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center align-middle"
+                    title="Atur Ulang Pengurutan & Filter"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 hover:rotate-90 transition-transform duration-300" />
+                  </button>
+                </td>
+                <td className="py-1 px-1.5 min-w-[145px]">
+                  <div className="flex flex-col gap-1 py-0.5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8.5px] text-slate-400 font-extrabold shrink-0 w-8 text-right uppercase">Awal</span>
+                      <IndonesianDatePicker 
+                        value={colFilters.startDate}
+                        onChange={(val) => handleColFilterChange('startDate', val)}
+                        className="w-[105px]"
+                        inputClassName="px-1.5 py-0.5 text-[9.5px] font-semibold text-slate-700 rounded-md animate-none"
+                        placeholder="Mulai..."
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8.5px] text-slate-400 font-extrabold shrink-0 w-8 text-right uppercase">Akhir</span>
+                      <IndonesianDatePicker 
+                        value={colFilters.endDate}
+                        onChange={(val) => handleColFilterChange('endDate', val)}
+                        className="w-[105px]"
+                        inputClassName="px-1.5 py-0.5 text-[9.5px] font-semibold text-slate-700 rounded-md animate-none"
+                        placeholder="Sampai..."
+                      />
+                    </div>
+                  </div>
+                </td>
+                <td className="py-1 px-2">
+                  <select
+                    value={colFilters.project}
+                    onChange={(e) => handleColFilterChange('project', e.target.value)}
+                    className="w-full px-1 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-semibold"
+                  >
+                    <option value="All">Semua</option>
+                    {projectsList.map(proj => (
+                      <option key={proj.id} value={proj.name}>{proj.name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="py-1 px-2">
+                  <select
+                    value={colFilters.category}
+                    onChange={(e) => handleColFilterChange('category', e.target.value)}
+                    className="w-full px-1 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  >
+                    <option value="All">Semua</option>
+                    <option value="Operational">Operasional</option>
+                    <option value="Non-Operational">Non-Ops</option>
+                  </select>
+                </td>
+                <td className="py-1 px-2">
+                  <select
+                    value={colFilters.account}
+                    onChange={(e) => handleColFilterChange('account', e.target.value)}
+                    className="w-full px-1 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-medium"
+                  >
+                    <option value="All">Semua</option>
+                    {accountsList.map(acc => (
+                      <option key={acc.id} value={acc.name}>{acc.name}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="py-1 px-2">
+                  <input
+                    type="text"
+                    placeholder="Saring rp..."
+                    value={colFilters.inflow}
+                    onChange={(e) => handleColFilterChange('inflow', e.target.value)}
+                    className="w-full px-2 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right"
+                  />
+                </td>
+                <td className="py-1 px-2">
+                  <input
+                    type="text"
+                    placeholder="Saring rp..."
+                    value={colFilters.outflow}
+                    onChange={(e) => handleColFilterChange('outflow', e.target.value)}
+                    className="w-full px-2 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono text-right"
+                  />
+                </td>
+                <td className="py-1 px-2">
+                  <input
+                    type="text"
+                    placeholder="Saring keterangan..."
+                    value={colFilters.description}
+                    onChange={(e) => handleColFilterChange('description', e.target.value)}
+                    className="w-full px-2 py-1 text-[11.5px] border border-slate-250 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  />
+                </td>
+                <td className="py-1 px-2">
+                  <input
+                    type="text"
+                    placeholder="Saring dicatat..."
+                    value={colFilters.recordedBy}
+                    onChange={(e) => handleColFilterChange('recordedBy', e.target.value)}
+                    className="w-full px-2 py-1 text-[11.5px] border border-slate-200 bg-white rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono"
+                  />
+                </td>
+                <td className="py-1 px-2 text-center text-slate-350 text-[10px] font-bold select-none">-</td>
+                <td className="py-1 px-2 text-center text-slate-350 text-[10px] font-bold select-none">-</td>
               </tr>
             </thead>
             <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
@@ -1057,12 +1407,12 @@ export default function TransactionView({
                       {/* Date Picker */}
                       <div>
                         <label className="block text-slate-500 mb-1 font-semibold uppercase text-[10px]">TANGGAL TRANSAKSI</label>
-                        <input 
-                          type="date" 
+                        <IndonesianDatePicker 
                           value={formDate}
-                          onChange={(e) => setFormDate(e.target.value)}
-                          required
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
+                          onChange={setFormDate}
+                          className="w-full font-semibold text-slate-800"
+                          inputClassName="px-3 py-2 text-xs font-medium text-slate-800"
+                          placeholder="Pilih Tanggal Transaksi"
                         />
                       </div>
 

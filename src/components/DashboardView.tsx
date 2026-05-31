@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, Project, DatabaseConfig, Role } from '../types';
 import { getProjects } from '../utils/db';
+import { formatIndonesianDate } from '../utils/date';
 import { 
   TrendingUp, TrendingDown, Landmark, Percent, ArrowUpRight, 
   ArrowDownRight, CircleDollarSign, Calendar, SlidersHorizontal, CheckSquare
@@ -411,7 +412,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
               <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
                 {recentTxs.map(t => (
                   <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{t.date}</td>
+                    <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{formatIndonesianDate(t.date)}</td>
                     <td className="py-3.5 px-4">
                       <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold ${
                         t.project === 'Melon' ? 'bg-emerald-50 text-emerald-700' :

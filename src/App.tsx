@@ -875,7 +875,7 @@ export default function App() {
         )}
 
         {/* Stable Sidebar - Desktop View */}
-        <aside className="w-64 bg-white text-slate-700 border-r border-slate-200 hidden md:flex flex-col justify-between shrink-0 no-print">
+        <aside className="w-64 bg-white text-slate-700 border-r border-slate-200 hidden md:flex flex-col justify-between shrink-0 no-print md:sticky md:top-[61.5px] md:h-[calc(100vh-61.5px)]">
           <div className="p-6 space-y-6">
             <div className="pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">

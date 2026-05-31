@@ -194,10 +194,23 @@ export async function getTransactions(): Promise<Transaction[]> {
   const responseJson = await res.json();
   const data = parseSheetsResponse(responseJson, 'Format data transaksi dari Google Sheets tidak didukung.');
 
-  return data.map((tx: any) => ({
-    ...tx,
-    amount: Number(tx.amount) || 0,
-  }));
+  return data.map((tx: any) => {
+    let sanitizedDate = tx.date || '';
+    if (sanitizedDate.includes('T') || sanitizedDate.includes(':')) {
+      const d = new Date(sanitizedDate);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        sanitizedDate = `${year}-${month}-${day}`;
+      }
+    }
+    return {
+      ...tx,
+      date: sanitizedDate,
+      amount: Number(tx.amount) || 0,
+    };
+  });
 }
 
 export async function addTransaction(tx: Transaction): Promise<boolean> {
