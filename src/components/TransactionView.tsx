@@ -65,6 +65,25 @@ const compressImageToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Utility: Format YYYY-MM-DD date to Indonesian dd-mmm-yyyy format without time
+const formatIndonesianDate = (dateStr: string): string => {
+  if (!dateStr) return '-';
+  // Split by 'T' or whitespace to strip time portions if present
+  const baseDate = dateStr.split(/[T\s]/)[0];
+  const parts = baseDate.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parts[0];
+  const monthIdx = parseInt(parts[1], 10) - 1;
+  const day = parts[2];
+  
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+  const monthName = months[monthIdx] || parts[1];
+  return `${day}-${monthName}-${year}`;
+};
+
 export default function TransactionView({ 
   transactions, 
   currentRole, 
@@ -781,7 +800,7 @@ export default function TransactionView({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-semibold text-slate-500 uppercase tracking-wider font-display">
-                <th className="py-3 px-4">ID Transaksi</th>
+                <th className="py-3 px-4 text-center w-12">No.</th>
                 <th className="py-3 px-4">Tanggal</th>
                 <th className="py-3 px-4">Proyek</th>
                 <th className="py-3 px-4">Kategori</th>
@@ -802,12 +821,13 @@ export default function TransactionView({
                   </td>
                 </tr>
               ) : (
-                currentItems.map(t => {
+                currentItems.map((t, index) => {
                   const allowedToEdit = canModifyOrDelete(t);
+                  const rowNum = indexOfFirstItem + index + 1;
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4 px-4 font-mono font-medium text-slate-400 text-[10px]">{t.id}</td>
-                      <td className="py-4 px-4 font-mono font-medium text-slate-700">{t.date}</td>
+                      <td className="py-4 px-4 font-mono font-bold text-slate-400 text-center text-[11px]">{rowNum}</td>
+                      <td className="py-4 px-4 font-mono font-medium text-slate-700">{formatIndonesianDate(t.date)}</td>
                       <td className="py-4 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide ${
                           t.project === 'Melon' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
@@ -1139,7 +1159,7 @@ export default function TransactionView({
                           value={formAmount !== '' ? formAmount.toLocaleString('id-ID') : ''}
                           onChange={(e) => {
                             const cleanStr = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-                            setFormAmount(cleanStr !== '' ? parseInt(cleanStr, 15) : '');
+                            setFormAmount(cleanStr !== '' ? parseInt(cleanStr, 10) : '');
                           }}
                           required
                           className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white font-mono font-bold text-xs"
