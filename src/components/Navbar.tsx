@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Role, DatabaseConfig } from '../types';
 import { getDatabaseConfig } from '../utils/db';
-import { LogOut, Cloud, CloudOff, FileSpreadsheet, Sprout, SlidersHorizontal } from 'lucide-react';
+import { LogOut, Cloud, CloudOff, FileSpreadsheet, Sprout, SlidersHorizontal, Pin, PinOff } from 'lucide-react';
 
 interface NavbarProps {
   currentRole: Role;
@@ -13,6 +13,8 @@ interface NavbarProps {
   onFontSizeChange: (size: 'normal' | 'large' | 'xl') => void;
   onSpacingChange: (spacing: 'normal' | 'narrow' | 'compact') => void;
   connectionStatus?: 'online' | 'offline' | 'checking';
+  sidebarPinned?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export default function Navbar({ 
@@ -24,7 +26,9 @@ export default function Navbar({
   textSpacing,
   onFontSizeChange,
   onSpacingChange,
-  connectionStatus = 'offline'
+  connectionStatus = 'offline',
+  sidebarPinned = true,
+  onToggleSidebar
 }: NavbarProps) {
   const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
   
@@ -57,6 +61,26 @@ export default function Navbar({
             </h1>
             <p className="text-[10px] text-slate-500 font-medium hidden sm:block mt-0.5">Pencatatan Finansial Greenhouse</p>
           </div>
+          
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="hidden md:flex items-center gap-1.5 ml-4 px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 text-slate-500 transition-all cursor-pointer font-bold text-[10px] uppercase tracking-wider shadow-3xs"
+              title={sidebarPinned ? "Aktifkan Autohide Navigasi" : "Sematkan Menu Navigasi"}
+            >
+              {sidebarPinned ? (
+                <>
+                  <PinOff className="w-3.5 h-3.5 text-slate-400 stroke-[2]" />
+                  <span className="text-slate-600 font-semibold hover:text-slate-900">Autohide</span>
+                </>
+              ) : (
+                <>
+                  <Pin className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
+                  <span className="text-emerald-750 font-bold">Tersemat</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Right side information panel */}

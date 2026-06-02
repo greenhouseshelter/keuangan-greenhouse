@@ -342,6 +342,21 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Desktop Sidebar auto-hide / collapse states
+  const [sidebarPinned, setSidebarPinned] = useState<boolean>(() => {
+    const saved = localStorage.getItem('greenhouse_sidebar_pinned');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+
+  const handleToggleSidebar = () => {
+    setSidebarPinned(prev => {
+      const newVal = !prev;
+      localStorage.setItem('greenhouse_sidebar_pinned', JSON.stringify(newVal));
+      return newVal;
+    });
+  };
+
   // Spacing and Typography accessibility styles
   const [textFontSize, setTextFontSize] = useState<'normal' | 'large' | 'xl'>(() => {
     return (localStorage.getItem('greenhouse_font_size') as any) || 'normal';
@@ -794,6 +809,8 @@ export default function App() {
         onFontSizeChange={handleFontSizeChange}
         onSpacingChange={handleSpacingChange}
         connectionStatus={connectionStatus}
+        sidebarPinned={sidebarPinned}
+        onToggleSidebar={handleToggleSidebar}
       />
 
       {/* Main responsive grid containing drawer and views */}
@@ -874,62 +891,97 @@ export default function App() {
           </div>
         )}
 
+        {/* Spacer Desktop Sidebar to keep layout stable while minimized are active */}
+        <div 
+          className={`hidden md:block shrink-0 transition-all duration-300 no-print ${
+            sidebarPinned ? 'w-64' : 'w-16'
+          }`}
+        />
+
         {/* Stable Sidebar - Desktop View */}
-        <aside className="w-64 bg-white text-slate-700 border-r border-slate-200 hidden md:flex flex-col justify-between shrink-0 no-print md:sticky md:top-[61.5px] md:h-[calc(100vh-61.5px)]">
-          <div className="p-6 space-y-6">
-            <div className="pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs">
-                  {currentUser.role[0]}
-                </div>
-                <div className="leading-tight">
-                  <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wide">AKSES PANEL</span>
-                  <span className="text-xs text-slate-800 font-bold block mt-0.5">{currentUser.role} Access</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Desktop Nav Items */}
-            <nav className="space-y-1">
-              {navItems.map(item => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      // Reset initial filters if switching away from Keuangan
-                      if (item.id !== 'keuangan') {
-                        setTxInitialFilters(undefined);
-                      }
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-xs font-semibold tracking-wide transition-colors ${
-                      isActive 
-                        ? 'bg-emerald-50 text-emerald-700' 
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
-                      <span>{item.name}</span>
+        <aside 
+          onMouseEnter={() => !sidebarPinned && setSidebarHovered(true)}
+          onMouseLeave={() => !sidebarPinned && setSidebarHovered(false)}
+          className={`bg-white text-slate-700 border-r border-slate-200 hidden md:flex flex-col justify-between shrink-0 no-print transition-all duration-300 ease-in-out z-30 ${
+            sidebarPinned 
+              ? 'md:sticky md:top-[61.5px] md:h-[calc(100vh-61.5px)] w-64' 
+              : `fixed left-0 top-[61.5px] h-[calc(100vh-61.5px)] ${(sidebarPinned || sidebarHovered) ? 'w-64 shadow-xl bg-white' : 'w-16'}`
+          }`}
+        >
+          {(() => {
+            const isSidebarExpanded = sidebarPinned || sidebarHovered;
+            return (
+              <>
+                <div className={`space-y-6 transition-all duration-300 ${isSidebarExpanded ? 'p-6' : 'p-3'}`}>
+                  <div className="pb-4 border-b border-slate-100">
+                    <div className={`flex items-center gap-2.5 bg-slate-50 border border-slate-200 transition-all duration-300 ${
+                      isSidebarExpanded ? 'p-2.5 rounded-xl' : 'p-1.5 rounded-lg justify-center'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs shrink-0" title={`${currentUser.role} Access`}>
+                        {currentUser.role[0]}
+                      </div>
+                      {isSidebarExpanded && (
+                        <div className="leading-tight transition-opacity duration-300 animate-in fade-in">
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wide">AKSES PANEL</span>
+                          <span className="text-xs text-slate-800 font-bold block mt-0.5">{currentUser.role} Access</span>
+                        </div>
+                      )}
                     </div>
-                    {isActive && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></div>}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+                  </div>
 
-          <div className="p-6 border-t border-slate-100 space-y-2 text-center text-[10px] text-slate-550 italic">
-            <div>Pencatatan Keuangan Greenhouse 2026</div>
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-1.5 py-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 mt-2 font-semibold text-[11px]"
-            >
-              <LogOut className="w-3.5 h-3.5 text-slate-400" /> Keluar Sistem
-            </button>
-          </div>
+                  {/* Desktop Nav Items */}
+                  <nav className="space-y-1">
+                    {navItems.map(item => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            // Reset initial filters if switching away from Keuangan
+                            if (item.id !== 'keuangan') {
+                              setTxInitialFilters(undefined);
+                            }
+                          }}
+                          className={`w-full flex items-center justify-between transition-all duration-300 ${
+                            isSidebarExpanded ? 'px-3 py-2 rounded-lg' : 'p-2 rounded-lg justify-center'
+                          } text-left text-xs font-semibold tracking-wide transition-colors ${
+                            isActive 
+                              ? 'bg-emerald-50 text-emerald-700' 
+                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                          }`}
+                          title={!isSidebarExpanded ? item.name : undefined}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            {isSidebarExpanded && (
+                              <span className="animate-in fade-in duration-300 whitespace-nowrap">{item.name}</span>
+                            )}
+                          </div>
+                          {isActive && isSidebarExpanded && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></div>}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+
+                <div className={`border-t border-slate-100 transition-all duration-300 text-center text-[10px] text-slate-500 italic ${isSidebarExpanded ? 'p-6 space-y-2' : 'p-3 space-y-1'}`}>
+                  {isSidebarExpanded && (
+                    <div className="animate-in fade-in duration-200">Pencatatan Keuangan Greenhouse 2026</div>
+                  )}
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 mt-2 font-semibold text-[11px]"
+                    title="Keluar Sistem"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-slate-400 shrink-0" /> 
+                    {isSidebarExpanded && <span className="animate-in fade-in">Keluar Sistem</span>}
+                  </button>
+                </div>
+              </>
+            );
+          })()}
         </aside>
 
         {/* Dynamic View Main Panel */}
