@@ -22,6 +22,7 @@ export interface Transaction {
   account: string; // Name of the financial account/akun
   image?: string; // Google Drive url or base64 evidence
   isLocked?: boolean | string; // Lock status details
+  isApproved?: boolean | string; // Approval status details
 }
 
 export type Role = 'Admin' | 'Pengelola' | 'Finance' | 'Accounting';

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Transaction, Project, Role, FinancialCategory, TransactionType, Account, ProjectItem } from '../types';
+import { Transaction, Project, Role, FinancialCategory, TransactionType, Account, ProjectItem, User } from '../types';
 import { getAccounts, getProjects, getSettings, SystemSettings } from '../utils/db';
 import { addActivityLog } from '../utils/activityLogger';
+import { isTxApproved } from '../utils/approvalHelper';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
@@ -17,6 +18,7 @@ interface TransactionViewProps {
   onUpdateTransaction: (tx: Transaction) => Promise<boolean>;
   onDeleteTransaction: (id: string) => Promise<boolean>;
   initialFilter?: { project?: Project; type?: 'Inflow' | 'Outflow' };
+  usersList?: User[];
 }
 
 // Utility: Compress image to Base64 in standard JPEG format under 600px limits
@@ -154,10 +156,51 @@ export default function TransactionView({
   onAddTransaction, 
   onUpdateTransaction, 
   onDeleteTransaction,
-  initialFilter
+  initialFilter,
+  usersList
 }: TransactionViewProps) {
   
-  // States
+  // States/Approved handler
+  const [txApprovedUpdatingId, setTxApprovedUpdatingId] = useState<string | null>(null);
+
+  const handleToggleApprove = async (tx: Transaction) => {
+    if (currentRole !== 'Finance' && currentRole !== 'Admin') {
+      alert('Hanya role Finance dan Admin yang berwenang menyetujui/mengubah status transaksi.');
+      return;
+    }
+
+    const isCurrentlyApproved = isTxApproved(tx);
+    const isLocked = tx.isLocked === true || tx.isLocked === 'TRUE' || tx.isLocked === 'true';
+
+    if (isLocked && isCurrentlyApproved) {
+      alert('Transaksi ini telah TERKUNCI (locked). Pengesahan (Approval) tidak dapat dibatalkan.');
+      return;
+    }
+
+    setTxApprovedUpdatingId(tx.id);
+    const nextApprovedState = !isCurrentlyApproved;
+    const updatedTx: Transaction = {
+      ...tx,
+      isApproved: nextApprovedState
+    };
+
+    try {
+      const success = await onUpdateTransaction(updatedTx);
+      if (success) {
+        addActivityLog(
+          nextApprovedState ? 'REKONSILIASI_SETUJU' : 'REKONSILIASI_BATAL_SETUJU',
+          `${currentRole} mengubah status Approve transaksi ${tx.id} senilai Rp ${tx.amount.toLocaleString('id-ID')} (Proyek ${tx.project}): ${nextApprovedState ? 'DISETUJUI' : 'DIBATALKAN'}`
+        );
+      } else {
+        alert('Gagal memperbarui status persetujuan.');
+      }
+    } catch (err: any) {
+      alert(`Error saat memperbarui: ${err.message || String(err)}`);
+    } finally {
+      setTxApprovedUpdatingId(null);
+    }
+  };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [projectFilter, setProjectFilter] = useState<Project | 'All'>(initialFilter?.project || 'All');
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'All'>(initialFilter?.type || 'All');
@@ -535,7 +578,8 @@ export default function TransactionView({
       createdAt: isEditing ? (oldTx?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       account: formAccount,
       image: formImage,
-      isLocked: isEditing ? oldTx?.isLocked : undefined
+      isLocked: isEditing ? oldTx?.isLocked : undefined,
+      isApproved: isEditing ? oldTx?.isApproved : (currentRole !== 'Pengelola')
     };
 
     let detailChanges = '';
@@ -1190,6 +1234,7 @@ export default function TransactionView({
             <thead>
               <tr className="bg-slate-50/75 border-b border-slate-200 text-[10px] font-semibold text-slate-500 uppercase tracking-wider font-display">
                 <th className="py-3 px-4 text-center w-12 text-[10px] uppercase">No.</th>
+                <th className="py-3 px-4 text-center w-16 text-[10px] uppercase font-display select-none">Approve</th>
                 {renderSortableHeader('date', 'Tanggal')}
                 {renderSortableHeader('project', 'Proyek')}
                 {renderSortableHeader('category', 'Kategori')}
@@ -1213,6 +1258,7 @@ export default function TransactionView({
                     <RefreshCw className="w-3.5 h-3.5 hover:rotate-90 transition-transform duration-300" />
                   </button>
                 </td>
+                <td className="py-1 px-2 text-center text-slate-350 text-[9px] font-bold select-none">-</td>
                 <td className="py-1 px-1.5 min-w-[145px]">
                   <div className="flex flex-col gap-1 py-0.5">
                     <div className="flex items-center gap-1">
@@ -1348,7 +1394,7 @@ export default function TransactionView({
             <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={12} className="py-12 text-center text-slate-400 font-medium">
                     Tidak ditemukan pencatatan transaksi yang cocok dengan pencarian Anda.
                   </td>
                 </tr>
@@ -1357,9 +1403,38 @@ export default function TransactionView({
                   const allowedToEdit = canModifyOrDelete(t);
                   const isTxLocked = t.isLocked === true || t.isLocked === 'TRUE' || t.isLocked === 'true';
                   const rowNum = indexOfFirstItem + index + 1;
+                  const isApproved = isTxApproved(t);
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 px-4 font-mono font-bold text-slate-400 text-center text-[11px]">{rowNum}</td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="flex items-center justify-center">
+                          {txApprovedUpdatingId === t.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={isApproved}
+                              onChange={() => handleToggleApprove(t)}
+                              disabled={t.type === 'Outflow' || (isTxLocked && isApproved) || (currentRole !== 'Finance' && currentRole !== 'Admin')}
+                              className={`w-3.5 h-3.5 rounded border-slate-350 text-emerald-600 focus:ring-emerald-505 transition-all text-center ${
+                                t.type === 'Outflow' || (isTxLocked && isApproved) || (currentRole !== 'Finance' && currentRole !== 'Admin')
+                                  ? 'opacity-65 cursor-not-allowed bg-slate-100'
+                                  : 'cursor-pointer hover:scale-110'
+                              }`}
+                              title={
+                                t.type === 'Outflow'
+                                  ? 'Uang keluar (Outflow) tidak memerlukan persetujuan.'
+                                  : isTxLocked && isApproved
+                                  ? 'Transaksi dikunci. Persetujuan tidak bisa dibatalkan.'
+                                  : (currentRole !== 'Finance' && currentRole !== 'Admin')
+                                  ? 'Hanya Finance dan Admin yang berwenang menyetujui transaksi.'
+                                  : 'Atur status pengesahan setoran uang masuk'
+                              }
+                            />
+                          )}
+                        </div>
+                      </td>
                       <td className="py-4 px-4 font-mono font-medium text-slate-700">{formatIndonesianDate(t.date)}</td>
                       <td className="py-4 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide ${

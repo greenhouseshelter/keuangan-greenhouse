@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Transaction, Project } from '../types';
 import { getProjects } from '../utils/db';
 import { addActivityLog } from '../utils/activityLogger';
+import { isTxApproved } from '../utils/approvalHelper';
 import { FileText, Printer, Calendar, ArrowUpRight, ArrowDownRight, TrendingUp, CheckCircle, ShieldCheck } from 'lucide-react';
 
 interface ReportsViewProps {
@@ -53,15 +54,15 @@ export default function ReportsView({ transactions }: ReportsViewProps) {
       list = list.filter(t => projectList.includes(t.project));
     }
 
-    const inflow = list.filter(t => t.type === 'Inflow').reduce((sum, t) => sum + t.amount, 0);
+    const inflow = list.filter(t => t.type === 'Inflow' && isTxApproved(t)).reduce((sum, t) => sum + t.amount, 0);
     const outflow = list.filter(t => t.type === 'Outflow').reduce((sum, t) => sum + t.amount, 0);
     
     // Split operational costs
-    const opInflow = list.filter(t => t.type === 'Inflow' && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
+    const opInflow = list.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
     const opOutflow = list.filter(t => t.type === 'Outflow' && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
     
     // Split non-operational costs
-    const nonOpInflow = list.filter(t => t.type === 'Inflow' && t.category === 'Non-Operational').reduce((sum, t) => sum + t.amount, 0);
+    const nonOpInflow = list.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.category === 'Non-Operational').reduce((sum, t) => sum + t.amount, 0);
     const nonOpOutflow = list.filter(t => t.type === 'Outflow' && t.category === 'Non-Operational').reduce((sum, t) => sum + t.amount, 0);
 
     const net = inflow - outflow;

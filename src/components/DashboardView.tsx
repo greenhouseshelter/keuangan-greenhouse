@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Transaction, Project, DatabaseConfig, Role } from '../types';
 import { getProjects } from '../utils/db';
 import { formatIndonesianDate } from '../utils/date';
+import { isTxApproved } from '../utils/approvalHelper';
 import { 
   TrendingUp, TrendingDown, Landmark, Percent, ArrowUpRight, 
   ArrowDownRight, CircleDollarSign, Calendar, SlidersHorizontal, CheckSquare
@@ -165,7 +166,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
   const filteredTxs = getFilteredTransactions();
 
   // Basic stats
-  const inflows = filteredTxs.filter(t => t.type === 'Inflow');
+  const inflows = filteredTxs.filter(t => t.type === 'Inflow' && isTxApproved(t));
   const outflows = filteredTxs.filter(t => t.type === 'Outflow');
 
   const totalInflow = inflows.reduce((sum, t) => sum + t.amount, 0);
@@ -177,7 +178,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
   const projects: Project[] = projectsList.length > 0 ? projectsList : ['Melon', 'Cabe', 'Perikanan', 'Ternak'];
   const projectStats = projects.map(proj => {
     const pTxs = filteredTxs.filter(t => t.project === proj);
-    const pIn = pTxs.filter(t => t.type === 'Inflow').reduce((sum, t) => sum + t.amount, 0);
+    const pIn = pTxs.filter(t => t.type === 'Inflow' && isTxApproved(t)).reduce((sum, t) => sum + t.amount, 0);
     const pOut = pTxs.filter(t => t.type === 'Outflow').reduce((sum, t) => sum + t.amount, 0);
     const pNet = pIn - pOut;
     const pMargin = pIn > 0 ? (pNet / pIn) * 100 : 0;
@@ -192,9 +193,9 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
   });
 
   // Category breakdown calculations (Operational vs Non-Operational)
-  const opsInflow = filteredTxs.filter(t => t.type === 'Inflow' && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
+  const opsInflow = filteredTxs.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
   const opsOutflow = filteredTxs.filter(t => t.type === 'Outflow' && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
-  const nonOpsInflow = filteredTxs.filter(t => t.type === 'Inflow' && t.category === 'Non-Operational').reduce((sum, t) => sum + t.amount, 0);
+  const nonOpsInflow = filteredTxs.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.category === 'Non-Operational').reduce((sum, t) => sum + t.amount, 0);
   const nonOpsOutflow = filteredTxs.filter(t => t.type === 'Outflow' && t.category === 'Non-Operational').reduce((sum, t) => sum + t.amount, 0);
 
   // Maximum value for charting scaling

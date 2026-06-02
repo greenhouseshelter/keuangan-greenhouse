@@ -16,10 +16,11 @@ import AdminProjectsView from './components/AdminProjectsView';
 import ChangePasswordView from './components/ChangePasswordView';
 import AdminLogsView from './components/AdminLogsView';
 import SystemSettingsView from './components/SystemSettingsView';
+import ReconciliationView from './components/ReconciliationView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff, AlertTriangle, Settings
+  Eye, EyeOff, AlertTriangle, Settings, CheckSquare
 } from 'lucide-react';
 
 const GOOGLE_APPS_SCRIPT_CODE = `// GOOGLE APPS SCRIPT DATABASE CONNECTOR (Code.gs)
@@ -580,6 +581,10 @@ export default function App() {
       { id: 'keuangan', name: 'Transaksi', icon: ScrollText }
     ];
 
+    if (role === 'Finance' || role === 'Admin') {
+      items.push({ id: 'rekonsiliasi', name: 'Rekonsiliasi Uang Masuk', icon: CheckSquare });
+    }
+
     if (role === 'Admin' || role === 'Finance' || role === 'Accounting') {
       items.push({ id: 'laporan', name: 'Laporan Laba Rugi', icon: FileBarChart2 });
       items.push({ id: 'proyek', name: 'Kelola Proyek', icon: Sprout });
@@ -1017,6 +1022,16 @@ export default function App() {
               onUpdateTransaction={handleUpdateTx}
               onDeleteTransaction={handleDeleteTx}
               initialFilter={txInitialFilters}
+              usersList={usersList}
+            />
+          )}
+
+          {activeTab === 'rekonsiliasi' && (currentUser.role === 'Admin' || currentUser.role === 'Finance') && (
+            <ReconciliationView 
+              transactions={transactions}
+              usersList={usersList}
+              onUpdateTransaction={handleUpdateTx}
+              currentRole={currentUser.role}
             />
           )}
 

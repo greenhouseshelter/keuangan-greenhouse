@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { addActivityLog } from '../utils/activityLogger';
 import { fetchWithTimeout } from '../utils/db';
+import { isTxApproved } from '../utils/approvalHelper';
 import { 
   BrainCircuit, RefreshCw, AlertTriangle, Sparkles, Quote, 
   ExternalLink, TrendingUp, TrendingDown, Award, DollarSign, ArrowUpRight, CheckCircle2
@@ -296,7 +297,7 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
 
   // Instantly Calculate client-side health metrics for bento-grid display
   const totalInflow = transactions
-    .filter(t => t.type === 'Inflow')
+    .filter(t => t.type === 'Inflow' && isTxApproved(t))
     .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
   const totalOutflow = transactions
     .filter(t => t.type === 'Outflow')
@@ -308,7 +309,7 @@ export default function FinancialAnalysis({ transactions }: FinancialAnalysisPro
   transactions.forEach(t => {
     const amt = Number(t.amount) || 0;
     if (!projectBalances[t.project]) projectBalances[t.project] = 0;
-    projectBalances[t.project] += t.type === 'Inflow' ? amt : -amt;
+    projectBalances[t.project] += t.type === 'Inflow' ? (isTxApproved(t) ? amt : 0) : -amt;
   });
 
   let bestProject = '-';
