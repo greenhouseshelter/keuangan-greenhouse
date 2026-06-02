@@ -21,6 +21,7 @@ export interface Transaction {
   createdAt: string; // ISO date-time
   account: string; // Name of the financial account/akun
   image?: string; // Google Drive url or base64 evidence
+  isLocked?: boolean | string; // Lock status details
 }
 
 export type Role = 'Admin' | 'Pengelola' | 'Finance' | 'Accounting';

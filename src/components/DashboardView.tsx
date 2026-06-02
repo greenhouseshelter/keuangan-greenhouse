@@ -14,6 +14,115 @@ interface DashboardViewProps {
   currentRole?: Role;
 }
 
+interface PieSlice {
+  name: string;
+  amount: number;
+  color: string;
+}
+
+function ProjectPieChart({ 
+  title, 
+  data, 
+  totalAmount, 
+  type 
+}: { 
+  title: string; 
+  data: PieSlice[]; 
+  totalAmount: number;
+  type: 'Inflow' | 'Outflow';
+}) {
+  const activeData = data.filter(d => d.amount > 0);
+  
+  if (totalAmount === 0 || activeData.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 h-44">
+        <span className="text-xs text-slate-400 font-semibold tracking-wide">
+          Tidak ada data {type === 'Inflow' ? 'pemasukan' : 'pengeluaran'}
+        </span>
+      </div>
+    );
+  }
+
+  const radius = 35;
+  const strokeWidth = 12;
+  const circumference = 2 * Math.PI * radius; // Approx 219.91
+  
+  let cumulativePercent = 0;
+
+  return (
+    <div className="bg-slate-50/40 p-4 rounded-2xl border border-slate-100 flex flex-col sm:flex-row items-center gap-6 justify-center w-full">
+      {/* SVG Donut */}
+      <div className="relative w-28 h-28 flex-shrink-0">
+        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="transparent"
+            stroke="#f1f5f9"
+            strokeWidth={strokeWidth}
+          />
+          {activeData.map((slice) => {
+            const percent = slice.amount / totalAmount;
+            const strokeLength = percent * circumference;
+            const strokeOffset = circumference - (cumulativePercent * circumference);
+            cumulativePercent += percent;
+            
+            return (
+              <circle
+                key={slice.name}
+                cx="50"
+                cy="50"
+                r={radius}
+                fill="transparent"
+                stroke={slice.color}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${strokeLength} ${circumference}`}
+                strokeDashoffset={strokeOffset}
+                strokeLinecap={activeData.length > 1 ? 'butt' : 'round'}
+                className="transition-all duration-300 hover:scale-[1.03] origin-center cursor-pointer"
+                style={{ transformOrigin: '50% 50%' }}
+              />
+            );
+          })}
+        </svg>
+        {/* Center Text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Total</span>
+          <span className="text-[10px] font-extrabold text-slate-700 font-mono mt-0.5" title={`Rp ${totalAmount.toLocaleString('id-ID')}`}>
+            {totalAmount >= 1000000 
+              ? `Rp ${(totalAmount / 1000000).toFixed(1)}M` 
+              : `Rp ${(totalAmount / 1000).toFixed(0)}K`}
+          </span>
+        </div>
+      </div>
+
+      {/* Legend / Stats */}
+      <div className="flex-1 space-y-1.5 w-full">
+        <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">{title}</p>
+        <div className="space-y-1">
+          {data.map((item) => {
+            const percentage = totalAmount > 0 ? (item.amount / totalAmount) * 105 : 0; // approximate visually normalized percentages
+            const realPercentage = totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0;
+            return (
+              <div key={item.name} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="text-slate-600 font-semibold truncate text-[10.5px]">{item.name}</span>
+                </div>
+                <div className="text-right font-mono flex items-center gap-1.5">
+                  <span className="text-slate-400 text-[9px]">({realPercentage.toFixed(0)}%)</span>
+                  <span className="font-bold text-slate-700 text-[10.5px]">Rp {item.amount.toLocaleString('id-ID')}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardView({ transactions, onNavigateToRecords, config, currentRole }: DashboardViewProps) {
   const [selectedTimeline, setSelectedTimeline] = useState<'all' | '30days' | '7days'>('all');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<Project | 'All'>('All');
@@ -235,6 +344,42 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
           <div className="mt-3 text-[10px] text-slate-400">
             Rasio laba dibanding total uang masuk
           </div>
+        </div>
+      </div>
+
+      {/* Pie Charts Breakdown Section */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div>
+          <h3 className="font-display font-bold text-slate-800 text-[15px]">Proporsi Alokasi Dana per Proyek</h3>
+          <p className="text-xs text-slate-500">Persentase kontribusi proyek terhadap total Pemasukan (In-Flow) dan Pengeluaran (Out-Flow).</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <ProjectPieChart 
+            title="Porsi Kontribusi Pemasukan (In-Flow)" 
+            data={projectStats.map(p => ({
+              name: p.name,
+              amount: p.inflow,
+              color: p.name === 'Melon' ? '#10b981' : 
+                     p.name === 'Cabe' ? '#f59e0b' : 
+                     p.name === 'Perikanan' ? '#3b82f6' : 
+                     '#a855f7'
+            }))}
+            totalAmount={totalInflow}
+            type="Inflow"
+          />
+          <ProjectPieChart 
+            title="Porsi Distribusi Pengeluaran (Out-Flow)" 
+            data={projectStats.map(p => ({
+              name: p.name,
+              amount: p.outflow,
+              color: p.name === 'Melon' ? '#10b981' : 
+                     p.name === 'Cabe' ? '#f59e0b' : 
+                     p.name === 'Perikanan' ? '#3b82f6' : 
+                     '#a855f7'
+            }))}
+            totalAmount={totalOutflow}
+            type="Outflow"
+          />
         </div>
       </div>
 

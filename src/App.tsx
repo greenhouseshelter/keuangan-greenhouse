@@ -593,6 +593,9 @@ export default function App() {
 
     if (role === 'Admin') {
       items.push({ id: 'pengguna', name: 'Kelola Hak Akses', icon: Users2 });
+    }
+
+    if (role === 'Admin' || role === 'Accounting') {
       items.push({ id: 'logs', name: 'Log Aktivitas', icon: Shield });
     }
 
@@ -1029,8 +1032,8 @@ export default function App() {
             <AdminUsersView />
           )}
 
-          {activeTab === 'logs' && currentUser.role === 'Admin' && (
-            <AdminLogsView />
+          {activeTab === 'logs' && (currentUser.role === 'Admin' || currentUser.role === 'Accounting') && (
+            <AdminLogsView currentRole={currentUser.role} />
           )}
 
           {activeTab === 'akun' && (currentUser.role === 'Admin' || currentUser.role === 'Finance' || currentUser.role === 'Accounting') && (

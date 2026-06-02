@@ -6,7 +6,7 @@ import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
   Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2,
-  Camera, VideoOff, RefreshCw, Calendar, Database
+  Camera, VideoOff, RefreshCw, Calendar, Database, Lock, Unlock
 } from 'lucide-react';
 
 interface TransactionViewProps {
@@ -421,6 +421,11 @@ export default function TransactionView({
 
   // Enforce role permission limits
   const canModifyOrDelete = (tx: Transaction) => {
+    const isLockedState = tx.isLocked === true || tx.isLocked === 'TRUE' || tx.isLocked === 'true';
+    if (isLockedState) {
+      // If locked, nobody can modify or delete without unlocking first
+      return false;
+    }
     if (currentRole === 'Admin' || currentRole === 'Accounting') {
       return true;
     }
@@ -431,6 +436,32 @@ export default function TransactionView({
       return tx.category === 'Operational' && tx.recordedBy === currentUser;
     }
     return false;
+  };
+
+  const handleToggleLock = async (tx: Transaction) => {
+    if (currentRole === 'Pengelola') return;
+    
+    const isCurrentlyLocked = tx.isLocked === true || tx.isLocked === 'TRUE' || tx.isLocked === 'true';
+    const nextLockedState = !isCurrentlyLocked;
+    
+    const updatedTx: Transaction = {
+      ...tx,
+      isLocked: nextLockedState
+    };
+
+    try {
+      const success = await onUpdateTransaction(updatedTx);
+      if (success) {
+        addActivityLog(
+          nextLockedState ? 'KUNCI_TRANSAKSI' : 'BUKA_KUNCI_TRANSAKSI',
+          `${currentRole} ${nextLockedState ? 'mengunci' : 'membuka kunci'} transaksi ${tx.id} senilai Rp ${tx.amount.toLocaleString('id-ID')} (Proyek ${tx.project} - Deskripsi: "${tx.description}")`
+        );
+      } else {
+        alert('Gagal memperbarui status kunci transaksi.');
+      }
+    } catch (err: any) {
+      alert(`Gagal memperbarui status kunci: ${err.message || String(err)}`);
+    }
   };
 
   const canAdd = () => true;
@@ -490,6 +521,8 @@ export default function TransactionView({
       finalCategory = 'Operational';
     }
 
+    const oldTx = isEditing ? transactions.find(t => t.id === editingId) : undefined;
+
     const txData: Transaction = {
       id: txId,
       date: formDate,
@@ -498,11 +531,44 @@ export default function TransactionView({
       category: finalCategory,
       amount: Number(formAmount),
       description: formDescription.trim(),
-      recordedBy: isEditing ? (transactions.find(t => t.id === editingId)?.recordedBy || currentUser) : currentUser,
-      createdAt: isEditing ? (transactions.find(t => t.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      recordedBy: isEditing ? currentRole : currentUser,
+      createdAt: isEditing ? (oldTx?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       account: formAccount,
-      image: formImage
+      image: formImage,
+      isLocked: isEditing ? oldTx?.isLocked : undefined
     };
+
+    let detailChanges = '';
+    if (isEditing && oldTx) {
+      const changes: string[] = [];
+      if (oldTx.date !== formDate) {
+        changes.push(`tanggal dari "${oldTx.date}" menjadi "${formDate}"`);
+      }
+      if (oldTx.project !== formProject) {
+        changes.push(`proyek dari "${oldTx.project}" menjadi "${formProject}"`);
+      }
+      if (oldTx.type !== formType) {
+        changes.push(`jenis dari "${oldTx.type}" menjadi "${formType}"`);
+      }
+      if (oldTx.category !== finalCategory) {
+        changes.push(`kategori dari "${oldTx.category}" menjadi "${finalCategory}"`);
+      }
+      if (oldTx.amount !== Number(formAmount)) {
+        changes.push(`nominal dari Rp ${oldTx.amount.toLocaleString('id-ID')} menjadi Rp ${Number(formAmount).toLocaleString('id-ID')}`);
+      }
+      if (oldTx.description !== formDescription.trim()) {
+        changes.push(`deskripsi dari "${oldTx.description}" menjadi "${formDescription.trim()}"`);
+      }
+      if (oldTx.account !== formAccount) {
+        changes.push(`akun COA dari "${oldTx.account}" menjadi "${formAccount}"`);
+      }
+      
+      if (changes.length > 0) {
+        detailChanges = `${currentRole} mengubah Transaksi ${txId}: ${changes.join(', ')}`;
+      } else {
+        detailChanges = `${currentRole} menyimpan ulang Transaksi ${txId} tanpa perubahan data`;
+      }
+    }
 
     // Begin Submission Progress State Stream (Tampilkan progres input transaksi)
     setIsSubmitting(true);
@@ -535,9 +601,9 @@ export default function TransactionView({
       setSubmitProgressStep('Mencatatkan ke riwayat log aktivitas sistem log...');
       
       if (isEditing) {
-        addActivityLog('EDIT_TRANSAKSI', `Mengubah Transaksi ${txId} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Proyek ${formProject} - Akun ${formAccount})`);
+        addActivityLog('EDIT_TRANSAKSI', detailChanges);
       } else {
-        addActivityLog('TAMBAH_TRANSAKSI', `Menambahkan Transaksi ${txId} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Proyek ${formProject} - Akun ${formAccount})`);
+        addActivityLog('TAMBAH_TRANSAKSI', `Menambahkan Transaksi Baru ${txId} oleh ${currentRole} senilai Rp ${Number(formAmount).toLocaleString('id-ID')} (Proyek ${formProject} - Akun ${formAccount}) dengan keterangan "${formDescription.trim()}"`);
       }
       await new Promise(r => setTimeout(r, 350));
 
@@ -1289,6 +1355,7 @@ export default function TransactionView({
               ) : (
                 currentItems.map((t, index) => {
                   const allowedToEdit = canModifyOrDelete(t);
+                  const isTxLocked = t.isLocked === true || t.isLocked === 'TRUE' || t.isLocked === 'true';
                   const rowNum = indexOfFirstItem + index + 1;
                   return (
                     <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1350,6 +1417,36 @@ export default function TransactionView({
                       </td>
                       <td className="py-4 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 font-semibold">
+                          {/* Lock/Unlock Toggle Function for roles other than Pengelola */}
+                          {currentRole !== 'Pengelola' ? (
+                            isTxLocked ? (
+                              <button
+                                onClick={() => handleToggleLock(t)}
+                                className="p-1.5 rounded-lg border bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                                title="Klik untuk membuka kunci transaksi ini"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleLock(t)}
+                                className="p-1.5 rounded-lg border bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                                title="Klik untuk mengunci transaksi ini (mencegah edit/hapus)"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                              </button>
+                            )
+                          ) : (
+                            isTxLocked && (
+                              <div
+                                className="p-1.5 rounded-lg border bg-red-50 border-red-100 text-red-500 animate-pulse"
+                                title="Transaksi ini TERKUNCI (Hanya bisa dibuka oleh Admin / Keuangan)"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </div>
+                            )
+                          )}
+
                           <button
                             onClick={() => handleEditClick(t)}
                             disabled={!allowedToEdit}
@@ -1358,7 +1455,13 @@ export default function TransactionView({
                                 ? 'bg-white border-slate-200 text-slate-655 hover:bg-slate-50 hover:text-indigo-600' 
                                 : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
                             }`}
-                            title={allowedToEdit ? 'Edit Transaksi' : 'Anda tidak punya akses mengubah ini'}
+                            title={
+                              isTxLocked
+                                ? (currentRole === 'Pengelola' 
+                                    ? 'Transaksi Terkunci oleh Admin/Keuangan' 
+                                    : 'Buka kunci terlebih dahulu untuk mengedit')
+                                : (allowedToEdit ? 'Edit Transaksi' : 'Anda tidak punya akses mengubah ini')
+                            }
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
@@ -1370,7 +1473,13 @@ export default function TransactionView({
                                 ? 'bg-white border-slate-200 text-slate-655 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100' 
                                 : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
                             }`}
-                            title={allowedToEdit ? 'Hapus Transaksi' : 'Anda tidak punya akses menghapus ini'}
+                            title={
+                              isTxLocked
+                                ? (currentRole === 'Pengelola' 
+                                    ? 'Transaksi Terkunci oleh Admin/Keuangan' 
+                                    : 'Buka kunci terlebih dahulu untuk menghapus')
+                                : (allowedToEdit ? 'Hapus Transaksi' : 'Anda tidak punya akses menghapus ini')
+                            }
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

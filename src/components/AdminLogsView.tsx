@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { getActivityLogs, clearActivityLogs, syncActivityLogsWithSheets } from '../utils/activityLogger';
-import { ActivityLog } from '../types';
+import { ActivityLog, Role } from '../types';
 import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   History, Search, Trash2, Printer, ChevronLeft, ChevronRight, AlertCircle, RefreshCw
 } from 'lucide-react';
 
-export default function AdminLogsView() {
+export default function AdminLogsView({ currentRole }: { currentRole?: Role }) {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -141,7 +141,7 @@ export default function AdminLogsView() {
         <div>
           <h2 className="text-xl font-display font-bold text-slate-800 flex items-center gap-2">
             <History className="w-5.5 h-5.5 text-slate-705" />
-            <span>Log Aktivitas Sistem (Admin Only)</span>
+            <span>Log Aktivitas Sistem</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Rekaman jejak aktivitas operasional, penambahan data, pengunduhan kas, dan perubahan konfigurasi sistem.
@@ -177,14 +177,16 @@ export default function AdminLogsView() {
             <span>Unduh Log</span>
           </button>
 
-          <button
-            onClick={handleClearLogs}
-            disabled={logs.length === 0}
-            className="px-4 py-2.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-100 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-3xs disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Bersihkan All Log</span>
-          </button>
+          {currentRole !== 'Accounting' && (
+            <button
+              onClick={handleClearLogs}
+              disabled={logs.length === 0}
+              className="px-4 py-2.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-100 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-3xs disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Bersihkan All Log</span>
+            </button>
+          )}
         </div>
       </div>
 
