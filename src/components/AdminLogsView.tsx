@@ -122,7 +122,7 @@ export default function AdminLogsView({ currentRole }: { currentRole?: Role }) {
       case 'HAPUS_TRANSAKSI': return 'bg-rose-50 text-rose-700 border border-rose-100';
       case 'UBAH_PASSWORD': return 'bg-indigo-50 text-indigo-700 border border-indigo-100';
       case 'DOWNLOAD_TRANSAKSI': return 'bg-purple-50 text-purple-700 border border-purple-100';
-      case 'UBAH_KEBIJAKAN_BUKTI': return 'bg-teal-50 text-teal-700 border border-teal-100';
+      case 'UBAH_KEBIJAKAN_BUKTI': return 'bg-amber-50 text-amber-700 border border-amber-100';
       case 'TAMBAH_PROYEK': return 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100';
       case 'EDIT_PROYEK': return 'bg-pink-50 text-pink-700 border border-pink-100';
       case 'HAPUS_PROYEK': return 'bg-neutral-100 text-neutral-700 border border-neutral-200';

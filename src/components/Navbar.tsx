@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Role, DatabaseConfig } from '../types';
 import { getDatabaseConfig } from '../utils/db';
-import { LogOut, Cloud, CloudOff, FileSpreadsheet, Sprout, SlidersHorizontal, Pin, PinOff } from 'lucide-react';
+import { LogOut, Cloud, CloudOff, FileSpreadsheet, Sprout, SlidersHorizontal, Pin, PinOff, Sun, Moon, Palette, Type } from 'lucide-react';
 
 interface NavbarProps {
   currentRole: Role;
@@ -15,6 +15,14 @@ interface NavbarProps {
   connectionStatus?: 'online' | 'offline' | 'checking';
   sidebarPinned?: boolean;
   onToggleSidebar?: () => void;
+  themeMode: 'light' | 'dark';
+  selectedTemplate: 'emerald' | 'gold' | 'purple';
+  onThemeModeChange: (mode: 'light' | 'dark') => void;
+  onTemplateChange: (template: 'emerald' | 'gold' | 'purple') => void;
+  layoutTemplate: 'sidebar' | 'topnav' | 'compact';
+  onLayoutTemplateChange: (layout: 'sidebar' | 'topnav' | 'compact') => void;
+  fontFamilyStyle: 'sans' | 'serif' | 'mono';
+  onFontStyleChange: (font: 'sans' | 'serif' | 'mono') => void;
 }
 
 export default function Navbar({ 
@@ -28,7 +36,15 @@ export default function Navbar({
   onSpacingChange,
   connectionStatus = 'offline',
   sidebarPinned = true,
-  onToggleSidebar
+  onToggleSidebar,
+  themeMode,
+  selectedTemplate,
+  onThemeModeChange,
+  onTemplateChange,
+  layoutTemplate,
+  onLayoutTemplateChange,
+  fontFamilyStyle,
+  onFontStyleChange
 }: NavbarProps) {
   const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
   
@@ -162,7 +178,7 @@ export default function Navbar({
                         </div>
                       </div>
 
-                      {/* Spacing Spacing Row */}
+                      {/* Spacing Row */}
                       <div className="space-y-1.5">
                         <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide">Kerapatan Jarak</label>
                         <div className="grid grid-cols-3 gap-1">
@@ -184,17 +200,142 @@ export default function Navbar({
                           ))}
                         </div>
                       </div>
+
+                      {/* Pilihan Gaya Font */}
+                      <div className="space-y-1.5">
+                        <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide flex items-center gap-1.5">
+                          <Type className="w-3 h-3 text-emerald-600" />
+                          <span>Pilihan Gaya Font</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {([ 'sans', 'serif', 'mono' ] as const).map((font) => (
+                            <button
+                              key={font}
+                              type="button"
+                              onClick={() => onFontStyleChange(font)}
+                              className={`py-1.5 px-0.5 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer flex flex-col items-center gap-1 justify-center ${
+                                fontFamilyStyle === font
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold shadow-xs'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className="text-[9.5px] leading-tight font-bold shrink-0">
+                                {font === 'sans' && 'Modern Sans'}
+                                {font === 'serif' && 'Serif Klasik'}
+                                {font === 'mono' && 'Tech Mono'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Template Warna Utama */}
+                      <div className="space-y-1.5">
+                        <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide flex items-center gap-1.5">
+                          <Palette className="w-3 h-3 text-emerald-600" />
+                          <span>Template Warna Utama</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {([ 'emerald', 'gold', 'purple' ] as const).map((tmpl) => (
+                            <button
+                              key={tmpl}
+                              type="button"
+                              onClick={() => onTemplateChange(tmpl)}
+                              className={`py-1.5 px-0.5 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer flex flex-col items-center gap-1 justify-center ${
+                                selectedTemplate === tmpl
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold shadow-xs'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${
+                                tmpl === 'emerald' ? 'bg-emerald-500' : tmpl === 'gold' ? 'bg-amber-500' : 'bg-purple-500'
+                              }`} />
+                              <span className="text-[9px] leading-tight shrink-0">
+                                {tmpl === 'emerald' && 'Emerald'}
+                                {tmpl === 'gold' && 'Luxury Gold'}
+                                {tmpl === 'purple' && 'Amethyst'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Gaya Layout Aplikasi */}
+                      <div className="space-y-1.5">
+                        <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide flex items-center gap-1.5">
+                          <SlidersHorizontal className="w-3 h-3 text-emerald-600" />
+                          <span>Gaya Layout Utama</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {([ 'sidebar', 'topnav', 'compact' ] as const).map((lay) => (
+                            <button
+                              key={lay}
+                              type="button"
+                              onClick={() => onLayoutTemplateChange(lay)}
+                              className={`py-2 px-0.5 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer flex flex-col items-center gap-1 justify-center ${
+                                layoutTemplate === lay
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold shadow-xs'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className="text-[9.5px] leading-tight font-bold shrink-0">
+                                {lay === 'sidebar' && 'Panel Klasik'}
+                                {lay === 'topnav' && 'Bento Eksekutif'}
+                                {lay === 'compact' && 'Konsol Sederhana'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Mode Tampilan (Dark Mode) */}
+                      <div className="space-y-1.5">
+                        <label className="text-slate-500 font-bold block uppercase text-[9px] tracking-wide flex items-center gap-1.5">
+                          {themeMode === 'light' ? <Sun className="w-3 h-3 text-amber-500" /> : <Moon className="w-3 h-3 text-indigo-400" />}
+                          <span>Mode Tampilan</span>
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {([ 'light', 'dark' ] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => onThemeModeChange(mode)}
+                              className={`py-1.5 px-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1.5 justify-center ${
+                                themeMode === mode
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold shadow-xs'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              {mode === 'light' ? (
+                                <>
+                                  <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                  <span>Mode Terang</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Moon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                  <span>Mode Gelap</span>
+                                </>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400">
                       <span>*Tersimpan otomatis</span>
-                      {(textFontSize !== 'normal' || textSpacing !== 'normal') && (
+                      {(textFontSize !== 'normal' || textSpacing !== 'normal' || selectedTemplate !== 'emerald' || themeMode !== 'light' || layoutTemplate !== 'sidebar' || fontFamilyStyle !== 'sans') && (
                         <button 
                           onClick={() => {
                             onFontSizeChange('normal');
                             onSpacingChange('normal');
+                            onTemplateChange('emerald');
+                            onThemeModeChange('light');
+                            onLayoutTemplateChange('sidebar');
+                            onFontStyleChange('sans');
                           }}
-                          className="text-emerald-600 hover:text-emerald-700 font-bold hover:underline"
+                          className="text-emerald-600 hover:text-emerald-700 font-bold hover:underline cursor-pointer"
                         >
                           Reset Default
                         </button>

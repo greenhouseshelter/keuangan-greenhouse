@@ -321,6 +321,23 @@ function clearSheet(ss, name) {
 }
 `;
 
+const getMetroColor = (id: string) => {
+  switch (id) {
+    case 'dashboard': return 'bg-sky-600 hover:bg-sky-500 text-white';
+    case 'keuangan': return 'bg-emerald-600 hover:bg-emerald-500 text-white';
+    case 'rekonsiliasi': return 'bg-indigo-600 hover:bg-indigo-500 text-white';
+    case 'laporan': return 'bg-rose-600 hover:bg-rose-500 text-white';
+    case 'proyek': return 'bg-amber-600 hover:bg-amber-500 text-white';
+    case 'akun': return 'bg-teal-600 hover:bg-teal-500 text-white';
+    case 'settings': return 'bg-slate-600 hover:bg-slate-500 text-white';
+    case 'analisis': return 'bg-purple-600 hover:bg-purple-500 text-white';
+    case 'pengguna': return 'bg-violet-700 hover:bg-violet-600 text-white';
+    case 'logs': return 'bg-zinc-650 hover:bg-zinc-600 text-white';
+    case 'ubah-password': return 'bg-cyan-600 hover:bg-cyan-500 text-white';
+    default: return 'bg-slate-700 hover:bg-slate-600 text-white';
+  }
+};
+
 export default function App() {
   // Auth state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -366,6 +383,34 @@ export default function App() {
     return (localStorage.getItem('greenhouse_spacing') as any) || 'normal';
   });
 
+  // Dynamic Theme Templates & Dark Mode State
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('greenhouse_theme_mode') as 'light' | 'dark') || 'light';
+  });
+  const [selectedTemplate, setSelectedTemplate] = useState<'emerald' | 'gold' | 'purple'>(() => {
+    return (localStorage.getItem('greenhouse_selected_template') as 'emerald' | 'gold' | 'purple') || 'emerald';
+  });
+  const [layoutTemplate, setLayoutTemplate] = useState<'sidebar' | 'topnav' | 'compact'>(() => {
+    return (localStorage.getItem('greenhouse_layout_template') as 'sidebar' | 'topnav' | 'compact') || 'sidebar';
+  });
+
+  const [fontFamilyStyle, setFontFamilyStyle] = useState<'sans' | 'serif' | 'mono'>(() => {
+    return (localStorage.getItem('greenhouse_font_style') as 'sans' | 'serif' | 'mono') || 'sans';
+  });
+
+  const [aiModel, setAiModel] = useState<string>(() => {
+    return localStorage.getItem('greenhouse_ai_model') || 'gemini-3.5-flash';
+  });
+
+  const [aiTemperature, setAiTemperature] = useState<number>(() => {
+    return parseFloat(localStorage.getItem('greenhouse_ai_temperature') || '0.7');
+  });
+
+  const [systemInstructions, setSystemInstructions] = useState<string>(() => {
+    return localStorage.getItem('greenhouse_system_instructions') || 
+      "Gunakan kebijakan audit ketat. Pastikan saldo kas proyek real-time sinkron sebelum menyetujui kuitansi pengeluaran operasional baru.";
+  });
+
   const handleFontSizeChange = (size: 'normal' | 'large' | 'xl') => {
     setTextFontSize(size);
     localStorage.setItem('greenhouse_font_size', size);
@@ -375,6 +420,42 @@ export default function App() {
     setTextSpacing(spacing);
     localStorage.setItem('greenhouse_spacing', spacing);
   };
+
+  const handleThemeModeChange = (mode: 'light' | 'dark') => {
+    setThemeMode(mode);
+    localStorage.setItem('greenhouse_theme_mode', mode);
+  };
+
+  const handleTemplateChange = (template: 'emerald' | 'gold' | 'purple') => {
+    setSelectedTemplate(template);
+    localStorage.setItem('greenhouse_selected_template', template);
+  };
+
+  const handleLayoutTemplateChange = (layout: 'sidebar' | 'topnav' | 'compact') => {
+    setLayoutTemplate(layout);
+    localStorage.setItem('greenhouse_layout_template', layout);
+  };
+
+  const handleFontStyleChange = (font: 'sans' | 'serif' | 'mono') => {
+    setFontFamilyStyle(font);
+    localStorage.setItem('greenhouse_font_style', font);
+  };
+
+  // Sync index classes on load & changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (themeMode === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [themeMode]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('theme-emerald', 'theme-teal', 'theme-purple', 'theme-gold');
+    root.classList.add(`theme-${selectedTemplate}`);
+  }, [selectedTemplate]);
 
   useEffect(() => {
     loadAppData();
@@ -744,8 +825,16 @@ export default function App() {
       ? 'view-scaled-xl' 
       : '';
 
+  const fontStyleClass = fontFamilyStyle === 'serif' 
+    ? 'font-serif' 
+    : fontFamilyStyle === 'mono' 
+      ? 'font-mono' 
+      : 'font-sans';
+
+  const layoutClass = `layout-${layoutTemplate}`;
+
   return (
-    <div className={`min-h-screen bg-slate-50 flex flex-col font-sans ${spacingClass} ${fontSizeClass}`}>
+    <div className={`min-h-screen bg-slate-50 flex flex-col ${fontStyleClass} ${spacingClass} ${fontSizeClass} ${layoutClass}`}>
       
       {/* Custom accessibility style overrides for global font adjustment and tighter container padding/spacing */}
       <style dangerouslySetInnerHTML={{ __html: `
@@ -804,6 +893,67 @@ export default function App() {
         .view-spacing-compact .leading-relaxed { line-height: 1.2 !important; }
         .view-spacing-compact .leading-normal { line-height: 1.15 !important; }
         .view-spacing-compact td, .view-spacing-compact th { padding-top: 0.35rem !important; padding-bottom: 0.35rem !important; }
+
+        /* RADICAL LAYOUT STYLING DIFFERENCES */
+
+        /* 1. Bento Eksekutif Layout overrides */
+        .layout-topnav {
+          background-color: var(--bg-main) !important;
+        }
+        .layout-topnav .bg-white {
+          background-color: var(--bg-card) !important;
+          border-radius: 24px !important;
+          border: 1px solid var(--border-color) !important;
+          box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05) !important;
+          transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .layout-topnav .bg-white:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08) !important;
+        }
+
+        /* 2. Konsol Data (High-Density / Tech style) Layout overrides */
+        .layout-compact {
+          background-color: var(--bg-main) !important;
+          background-image: radial-gradient(var(--border-color) 0.5px, transparent 0.5px) !important;
+          background-size: 16px 16px !important;
+        }
+        .layout-compact .bg-white {
+          background-color: var(--bg-card) !important;
+          border-radius: 5px !important;
+          box-shadow: none !important;
+          border: 1.5px solid var(--border-color) !important;
+        }
+        /* Make numeric data terminal-like */
+        .layout-compact th, 
+        .layout-compact td, 
+        .layout-compact .text-2xl, 
+        .layout-compact .text-3xl, 
+        .layout-compact .text-xl,
+        .layout-compact .font-bold,
+        .layout-compact .font-semibold {
+          font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace !important;
+        }
+        /* Extra visual density for Console View */
+        .layout-compact td, .layout-compact th {
+          padding-top: 0.3rem !important;
+          padding-bottom: 0.3rem !important;
+          padding-left: 0.5rem !important;
+          padding-right: 0.5rem !important;
+          font-size: 11px !important;
+        }
+        .layout-compact .p-6 {
+          padding: 0.75rem !important;
+        }
+        .layout-compact .p-8 {
+          padding: 1rem !important;
+        }
+        .layout-compact .gap-6 {
+          gap: 0.75rem !important;
+        }
+        .layout-compact .mb-6 {
+          margin-bottom: 0.75rem !important;
+        }
       ` }} />
 
       {/* Top Header navbar control panel */}
@@ -819,7 +969,106 @@ export default function App() {
         connectionStatus={connectionStatus}
         sidebarPinned={sidebarPinned}
         onToggleSidebar={handleToggleSidebar}
+        themeMode={themeMode}
+        selectedTemplate={selectedTemplate}
+        onThemeModeChange={handleThemeModeChange}
+        onTemplateChange={handleTemplateChange}
+        layoutTemplate={layoutTemplate}
+        onLayoutTemplateChange={handleLayoutTemplateChange}
+        fontFamilyStyle={fontFamilyStyle}
+        onFontStyleChange={handleFontStyleChange}
       />
+
+      {/* Render top horizontal navigation if layoutTemplate is topnav */}
+      {layoutTemplate === 'topnav' && (
+        <div className="bg-white border-b border-slate-200 shadow-xs sticky top-[61px] z-20 no-print hidden md:block">
+          <div className="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between">
+            <nav className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      if (item.id !== 'keuangan') {
+                        setTxInitialFilters(undefined);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold select-none transition-all cursor-pointer whitespace-nowrap ${
+                      isActive 
+                        ? 'bg-emerald-50 text-emerald-700' 
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-emerald-700' : 'text-slate-400'}`} />
+                    <span>{item.name}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Akses: {currentUser.role}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive AI Studio Model parameter bar (Bento Eksekutif Layout) */}
+      {layoutTemplate === 'topnav' && (
+        <div className="bg-slate-900 border-b border-slate-800 text-slate-100 px-6 py-3 shadow-md no-print animate-in duration-200 slide-in-from-top-4 relative z-20">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 items-center justify-between">
+            {/* AI Model Parameter controllers */}
+            <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+              <div className="flex items-center gap-1.5 text-xs text-yellow-500 font-bold tracking-wider uppercase">
+                <BrainCircuit className="w-4 h-4 animate-bounce" />
+                <span>AI SYSTEM MODEL</span>
+              </div>
+              <div className="h-4 w-[1px] bg-slate-800 hidden sm:block"></div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-400 font-bold uppercase font-mono">Model</span>
+                <select 
+                  value={aiModel} 
+                  onChange={(e) => {
+                    setAiModel(e.target.value);
+                    localStorage.setItem('greenhouse_ai_model', e.target.value);
+                  }}
+                  className="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:border-yellow-500 font-mono transition-all"
+                >
+                  <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                  <option value="gemini-3.5-pro">gemini-3.5-pro</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-slate-400 font-bold uppercase font-mono">Temp</span>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="1" 
+                  step="0.1" 
+                  value={aiTemperature} 
+                  onChange={(e) => {
+                    setAiTemperature(parseFloat(e.target.value));
+                    localStorage.setItem('greenhouse_ai_temperature', e.target.value);
+                  }}
+                  className="w-20 accent-yellow-500 h-1 bg-slate-700 rounded-lg appearance-none cursor-ew-resize"
+                />
+                <span className="text-xs text-slate-300 font-mono font-bold">{aiTemperature}</span>
+              </div>
+            </div>
+
+            {/* Quick Prompt/Guidance context info */}
+            <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
+              Active Session Token: <span className="text-yellow-500 font-semibold uppercase font-mono">[{currentUser.role}]</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main responsive grid containing drawer and views */}
       <div className="flex-1 flex flex-col md:flex-row relative">
@@ -900,101 +1149,208 @@ export default function App() {
         )}
 
         {/* Spacer Desktop Sidebar to keep layout stable while minimized are active */}
-        <div 
-          className={`hidden md:block shrink-0 transition-all duration-300 no-print ${
-            sidebarPinned ? 'w-0' : 'w-16'
-          }`}
-        />
+        {layoutTemplate === 'sidebar' && (
+          <div 
+            className={`hidden md:block shrink-0 transition-all duration-300 no-print ${
+              sidebarPinned ? 'w-0' : 'w-16'
+            }`}
+          />
+        )}
 
-        {/* Stable Sidebar - Desktop View */}
-        <aside 
-          onMouseEnter={() => !sidebarPinned && setSidebarHovered(true)}
-          onMouseLeave={() => !sidebarPinned && setSidebarHovered(false)}
-          className={`bg-white text-slate-700 border-r border-slate-200 hidden md:flex flex-col justify-between shrink-0 no-print transition-all duration-300 ease-in-out z-30 ${
-            sidebarPinned 
-              ? 'md:sticky md:top-[61.5px] md:h-[calc(100vh-61.5px)] w-64' 
-              : `fixed left-0 top-[61.5px] h-[calc(100vh-61.5px)] ${(sidebarPinned || sidebarHovered) ? 'w-64 shadow-xl bg-white' : 'w-16'}`
-          }`}
-        >
-          {(() => {
-            const isSidebarExpanded = sidebarPinned || sidebarHovered;
-            return (
-              <>
-                <div className={`space-y-6 transition-all duration-300 ${isSidebarExpanded ? 'p-6' : 'p-3'}`}>
-                  <div className="pb-4 border-b border-slate-100">
-                    <div className={`flex items-center gap-2.5 bg-slate-50 border border-slate-200 transition-all duration-300 ${
-                      isSidebarExpanded ? 'p-2.5 rounded-xl' : 'p-1.5 rounded-lg justify-center'
-                    }`}>
-                      <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs shrink-0" title={`${currentUser.role} Access`}>
-                        {currentUser.role[0]}
-                      </div>
-                      {isSidebarExpanded && (
-                        <div className="leading-tight transition-opacity duration-300 animate-in fade-in">
-                          <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wide">AKSES PANEL</span>
-                          <span className="text-xs text-slate-800 font-bold block mt-0.5">{currentUser.role} Access</span>
+        {/* Stable Sidebar - Desktop View (Classical Panel) */}
+        {layoutTemplate === 'sidebar' && (
+          <aside 
+            onMouseEnter={() => !sidebarPinned && setSidebarHovered(true)}
+            onMouseLeave={() => !sidebarPinned && setSidebarHovered(false)}
+            className={`bg-white text-slate-700 border-r border-slate-200 hidden md:flex flex-col justify-between shrink-0 no-print transition-all duration-300 ease-in-out z-30 ${
+              sidebarPinned 
+                ? 'md:sticky md:top-[61.5px] md:h-[calc(100vh-61.5px)] w-64' 
+                : `fixed left-0 top-[61.5px] h-[calc(100vh-61.5px)] ${(sidebarPinned || sidebarHovered) ? 'w-64 shadow-xl bg-white' : 'w-16'}`
+            }`}
+          >
+            {(() => {
+              const isSidebarExpanded = sidebarPinned || sidebarHovered;
+              return (
+                <>
+                  <div className={`space-y-6 transition-all duration-300 ${isSidebarExpanded ? 'p-6' : 'p-3'}`}>
+                    <div className="pb-4 border-b border-slate-100">
+                      <div className={`flex items-center gap-2.5 bg-slate-50 border border-slate-200 transition-all duration-300 ${
+                        isSidebarExpanded ? 'p-2.5 rounded-xl' : 'p-1.5 rounded-lg justify-center'
+                      }`}>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs uppercase shadow-xs shrink-0" title={`${currentUser.role} Access`}>
+                          {currentUser.role[0]}
                         </div>
-                      )}
+                        {isSidebarExpanded && (
+                          <div className="leading-tight transition-opacity duration-300 animate-in fade-in">
+                            <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wide">AKSES PANEL</span>
+                            <span className="text-xs text-slate-800 font-bold block mt-0.5">{currentUser.role} Access</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Desktop Nav Items */}
+                    <nav className="space-y-1">
+                      {navItems.map(item => {
+                        const Icon = item.icon;
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              // Reset initial filters if switching away from Keuangan
+                              if (item.id !== 'keuangan') {
+                                setTxInitialFilters(undefined);
+                              }
+                            }}
+                            className={`w-full flex items-center justify-between transition-all duration-300 ${
+                              isSidebarExpanded ? 'px-3 py-2 rounded-lg' : 'p-2 rounded-lg justify-center'
+                            } text-left text-xs font-semibold tracking-wide transition-colors ${
+                              isActive 
+                                ? 'bg-emerald-50 text-emerald-700' 
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            }`}
+                            title={!isSidebarExpanded ? item.name : undefined}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                              {isSidebarExpanded && (
+                                <span className="animate-in fade-in duration-300 whitespace-nowrap">{item.name}</span>
+                              )}
+                            </div>
+                            {isActive && isSidebarExpanded && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></div>}
+                          </button>
+                        );
+                      })}
+                    </nav>
                   </div>
 
-                  {/* Desktop Nav Items */}
-                  <nav className="space-y-1">
-                    {navItems.map(item => {
-                      const Icon = item.icon;
-                      const isActive = activeTab === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            setActiveTab(item.id);
-                            // Reset initial filters if switching away from Keuangan
-                            if (item.id !== 'keuangan') {
-                              setTxInitialFilters(undefined);
-                            }
-                          }}
-                          className={`w-full flex items-center justify-between transition-all duration-300 ${
-                            isSidebarExpanded ? 'px-3 py-2 rounded-lg' : 'p-2 rounded-lg justify-center'
-                          } text-left text-xs font-semibold tracking-wide transition-colors ${
-                            isActive 
-                              ? 'bg-emerald-50 text-emerald-700' 
-                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                          }`}
-                          title={!isSidebarExpanded ? item.name : undefined}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
-                            {isSidebarExpanded && (
-                              <span className="animate-in fade-in duration-300 whitespace-nowrap">{item.name}</span>
-                            )}
-                          </div>
-                          {isActive && isSidebarExpanded && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></div>}
-                        </button>
-                      );
-                    })}
-                  </nav>
-                </div>
+                  <div className={`border-t border-slate-100 transition-all duration-300 text-center text-[10px] text-slate-500 italic ${isSidebarExpanded ? 'p-6 space-y-2' : 'p-3 space-y-1'}`}>
+                    {isSidebarExpanded && (
+                      <div className="animate-in fade-in duration-200">Pencatatan Keuangan Greenhouse 2026</div>
+                    )}
+                    <button 
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 mt-2 font-semibold text-[11px]"
+                      title="Keluar Sistem"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-slate-400 shrink-0" /> 
+                      {isSidebarExpanded && <span className="animate-in fade-in">Keluar Sistem</span>}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </aside>
+        )}
 
-                <div className={`border-t border-slate-100 transition-all duration-300 text-center text-[10px] text-slate-500 italic ${isSidebarExpanded ? 'p-6 space-y-2' : 'p-3 space-y-1'}`}>
-                  {isSidebarExpanded && (
-                    <div className="animate-in fade-in duration-200">Pencatatan Keuangan Greenhouse 2026</div>
-                  )}
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 hover:bg-slate-50 rounded-lg text-slate-500 hover:text-slate-800 transition-colors border border-slate-200 mt-2 font-semibold text-[11px]"
-                    title="Keluar Sistem"
-                  >
-                    <LogOut className="w-3.5 h-3.5 text-slate-400 shrink-0" /> 
-                    {isSidebarExpanded && <span className="animate-in fade-in">Keluar Sistem</span>}
-                  </button>
+        {/* Dynamic Soft Bento Compact Navigation Sidebar (Konsol Sederhana) */}
+        {layoutTemplate === 'compact' && (
+          <aside className="bg-slate-50/90 dark:bg-slate-900/90 border-r border-slate-200/80 dark:border-slate-800/80 hidden md:flex flex-col justify-between shrink-0 no-print sticky top-[61.5px] h-[calc(100vh-61.5px)] w-[235px] select-none p-4 overflow-y-auto scrollbar-thin">
+            <div className="space-y-4">
+              {/* Heading resembling modern SaaS dashboard */}
+              <div className="pb-3 border-b border-slate-200/60 dark:border-slate-800/60">
+                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold tracking-widest uppercase block mb-1 font-mono">
+                  &bull; CONSOLE NAVIGATOR
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 tracking-tight font-sans uppercase">
+                    KONSOL SEDERHANA
+                  </span>
                 </div>
-              </>
-            );
-          })()}
-        </aside>
+              </div>
+
+              {/* Elegant Bento Grid (2 Columns of Rounded Cards) - No hidden scrollbar, natural scroll when viewport is small */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {navItems.map(item => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        if (item.id !== 'keuangan') {
+                          setTxInitialFilters(undefined);
+                        }
+                      }}
+                      className={`aspect-square shrink-0 flex flex-col justify-between p-3.5 rounded-2xl border transition-all duration-200 relative select-none text-left cursor-pointer group transform hover:-translate-y-0.5 hover:shadow-sm active:scale-95 ${
+                        isActive 
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 shadow-xs' 
+                          : 'bg-white text-slate-650 border-slate-200/70 hover:bg-emerald-50/55 hover:text-emerald-700 hover:border-emerald-250/70 dark:bg-slate-950/20 dark:text-slate-400 dark:border-slate-800/50 dark:hover:bg-slate-900/40 dark:hover:text-slate-200 dark:hover:border-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between w-full">
+                        <div className={`p-2 rounded-xl transition-colors ${
+                          isActive 
+                            ? 'bg-emerald-200/60 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300' 
+                            : 'bg-slate-100 dark:bg-slate-900 text-slate-505 dark:text-slate-400 group-hover:bg-emerald-100/50 group-hover:text-emerald-700'
+                        }`}>
+                          <Icon className="w-4 h-4 shrink-0" />
+                        </div>
+                        {isActive && (
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping mt-1 mr-0.5" />
+                        )}
+                      </div>
+
+                      <span className="text-[10px] font-bold tracking-tight leading-tight uppercase font-sans mt-2 block break-words">
+                        {item.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Logout Soft Rounded Button */}
+            <div className="border-t border-slate-200/60 dark:border-slate-800/60 pt-3.5 mt-4">
+              <button 
+                onClick={handleLogout}
+                className="w-full h-11 bg-rose-50 hover:bg-rose-100/80 text-rose-700 border border-rose-200/45 dark:bg-rose-950/15 dark:hover:bg-rose-950/25 dark:text-rose-400 dark:border-rose-900/30 font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 rounded-2xl hover:shadow-xs active:scale-95 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span>KELUAR SISTEM</span>
+              </button>
+            </div>
+          </aside>
+        )}
 
         {/* Dynamic View Main Panel */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto print-p-0">
+        <main className={`flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto print-p-0 ${layoutTemplate === 'topnav' ? 'max-w-7xl mx-auto w-full' : ''}`}>
           
+          {/* Bento Eksekutif Layout: Google AI Studio Instructions Workspace */}
+          {layoutTemplate === 'topnav' && (
+            <div className="mb-6 bg-slate-900 border border-slate-800 text-slate-300 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row gap-4 items-start md:items-center justify-between no-print animate-in duration-300 zoom-in-95">
+              <div className="space-y-1 flex-1 w-full">
+                <span className="text-[10px] text-yellow-500 font-extrabold tracking-widest uppercase block mb-1 font-mono">
+                  &bull; SYSTEM INSTRUCTIONS
+                </span>
+                <textarea
+                  value={systemInstructions}
+                  onChange={(e) => {
+                    setSystemInstructions(e.target.value);
+                    localStorage.setItem('greenhouse_system_instructions', e.target.value);
+                  }}
+                  placeholder="Masukkan aturan operasional atau panduan audit AI untuk greenhouse ini..."
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3.5 py-2 text-xs font-mono focus:outline-none focus:border-yellow-500 max-h-24 leading-relaxed outline-none"
+                  rows={2}
+                />
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 shrink-0 flex flex-col gap-1 text-[11px] font-mono select-none w-full md:w-auto">
+                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  Rules Parser: AKTIF
+                </span>
+                <span className="text-slate-450 text-[9px] uppercase font-sans font-semibold mt-1">Sistem menyaring transaksi secara otomatis</span>
+              </div>
+            </div>
+          )}
+
+
+
           {/* Sync indicator warning */}
           {appLoading && (
             <div className="p-3 mb-6 bg-blue-50/50 border border-blue-100 rounded-xl flex items-center justify-center text-xs text-blue-700 font-medium gap-2">

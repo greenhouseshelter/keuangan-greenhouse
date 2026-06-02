@@ -459,10 +459,10 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
         {/* NET PROFIT MARGIN */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex justify-between items-start">
-            <div className="p-3 bg-teal-50 text-teal-600 rounded-xl">
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
               <Percent className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md">
+            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
               RENTABILITAS
             </span>
           </div>
@@ -617,7 +617,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
                   title="Operasional"
                 ></div>
                 <div 
-                  className="bg-teal-400 h-full transition-all duration-500" 
+                  className="bg-amber-400 h-full transition-all duration-500" 
                   style={{ width: `${totalInflow > 0 ? (nonOpsInflow / totalInflow) * 100 : 50}%` }}
                   title="Non-Operasional"
                 ></div>
@@ -628,7 +628,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
                   Op: Rp {opsInflow.toLocaleString('id-ID')}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-teal-400 block"></span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 block"></span>
                   Non-Op: Rp {nonOpsInflow.toLocaleString('id-ID')}
                 </span>
               </div>
