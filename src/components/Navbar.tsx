@@ -78,7 +78,7 @@ export default function Navbar({
             <p className="text-[10px] text-slate-500 font-medium hidden sm:block mt-0.5">Pencatatan Finansial Greenhouse</p>
           </div>
           
-          {onToggleSidebar && (
+          {layoutTemplate === 'sidebar' && onToggleSidebar && (
             <button
               onClick={onToggleSidebar}
               className="hidden md:flex items-center gap-1.5 ml-4 px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 text-slate-500 transition-all cursor-pointer font-bold text-[10px] uppercase tracking-wider shadow-3xs"
