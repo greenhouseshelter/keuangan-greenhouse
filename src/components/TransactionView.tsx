@@ -10,6 +10,8 @@ import {
   Camera, VideoOff, RefreshCw, Calendar, Database, Lock, Unlock
 } from 'lucide-react';
 
+import { getProjectBadgeClass } from './DashboardView';
+
 interface TransactionViewProps {
   transactions: Transaction[];
   currentRole: Role;
@@ -486,6 +488,12 @@ export default function TransactionView({
     
     const isCurrentlyLocked = tx.isLocked === true || tx.isLocked === 'TRUE' || tx.isLocked === 'true';
     const nextLockedState = !isCurrentlyLocked;
+
+    // Transaksi yang belum disetujui Finance tidak bisa di-lock
+    if (nextLockedState && !isTxApproved(tx)) {
+      alert('Transaksi yang belum disetujui oleh Finance/Admin tidak dapat dikunci.');
+      return;
+    }
     
     const updatedTx: Transaction = {
       ...tx,
@@ -1437,12 +1445,7 @@ export default function TransactionView({
                       </td>
                       <td className="py-4 px-4 font-mono font-medium text-slate-700">{formatIndonesianDate(t.date)}</td>
                       <td className="py-4 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide ${
-                          t.project === 'Melon' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                          t.project === 'Cabe' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                          t.project === 'Perikanan' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                          'bg-purple-50 text-purple-700 border border-purple-100'
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide ${getProjectBadgeClass(t.project)}`}>
                           {t.project}
                         </span>
                       </td>
@@ -1505,8 +1508,17 @@ export default function TransactionView({
                             ) : (
                               <button
                                 onClick={() => handleToggleLock(t)}
-                                className="p-1.5 rounded-lg border bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all cursor-pointer hover:scale-105 active:scale-95"
-                                title="Klik untuk mengunci transaksi ini (mencegah edit/hapus)"
+                                disabled={!isApproved}
+                                className={`p-1.5 rounded-lg border transition-all ${
+                                  isApproved 
+                                    ? 'bg-white border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 cursor-pointer hover:scale-105 active:scale-95' 
+                                    : 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                                }`}
+                                title={
+                                  isApproved 
+                                    ? 'Klik untuk mengunci transaksi ini (mencegah edit/hapus)' 
+                                    : 'Transaksi belum disetujui Finance, tidak dapat dikunci'
+                                }
                               >
                                 <Unlock className="w-3.5 h-3.5" />
                               </button>

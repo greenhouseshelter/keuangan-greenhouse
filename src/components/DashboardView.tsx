@@ -15,6 +15,42 @@ interface DashboardViewProps {
   currentRole?: Role;
 }
 
+export function getProjectHexColor(name: string): string {
+  const norm = name.trim().toLowerCase();
+  if (norm.includes('melon')) return '#10b981';       // Emerald green
+  if (norm.includes('cabe') || norm.includes('cabai')) return '#f59e0b';        // Amber / Orange
+  if (norm.includes('perikanan') || norm.includes('ikan')) return '#3b82f6';   // Blue
+  if (norm.includes('ternak') || norm.includes('sapi') || norm.includes('kambing') || norm.includes('ayam') || norm.includes('hewan')) return '#a855f7';      // Purple
+  if (
+    norm.includes('greenhouse') || 
+    norm.includes('green house') || 
+    norm.includes('green-house') ||
+    norm.includes('green') ||
+    norm.includes('house')
+  ) {
+    return '#06b6d4'; // Teal/Cyan for Greenhouse variations
+  }
+  return '#ec4899'; // Pink/Magenta for any other dynamic project
+}
+
+export function getProjectBadgeClass(name: string): string {
+  const norm = name.trim().toLowerCase();
+  if (norm.includes('melon')) return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+  if (norm.includes('cabe') || norm.includes('cabai')) return 'bg-amber-50 text-amber-700 border border-amber-100';
+  if (norm.includes('perikanan') || norm.includes('ikan')) return 'bg-blue-50 text-blue-700 border border-blue-105';
+  if (norm.includes('ternak') || norm.includes('sapi') || norm.includes('kambing') || norm.includes('ayam') || norm.includes('hewan')) return 'bg-purple-50 text-purple-700 border border-purple-100';
+  if (
+    norm.includes('greenhouse') || 
+    norm.includes('green house') || 
+    norm.includes('green-house') ||
+    norm.includes('green') ||
+    norm.includes('house')
+  ) {
+    return 'bg-cyan-50 text-cyan-700 border border-cyan-100';
+  }
+  return 'bg-pink-50 text-pink-700 border border-pink-100';
+}
+
 interface PieSlice {
   name: string;
   amount: number;
@@ -360,10 +396,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
             data={projectStats.map(p => ({
               name: p.name,
               amount: p.inflow,
-              color: p.name === 'Melon' ? '#10b981' : 
-                     p.name === 'Cabe' ? '#f59e0b' : 
-                     p.name === 'Perikanan' ? '#3b82f6' : 
-                     '#a855f7'
+              color: getProjectHexColor(p.name)
             }))}
             totalAmount={totalInflow}
             type="Inflow"
@@ -373,10 +406,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
             data={projectStats.map(p => ({
               name: p.name,
               amount: p.outflow,
-              color: p.name === 'Melon' ? '#10b981' : 
-                     p.name === 'Cabe' ? '#f59e0b' : 
-                     p.name === 'Perikanan' ? '#3b82f6' : 
-                     '#a855f7'
+              color: getProjectHexColor(p.name)
             }))}
             totalAmount={totalOutflow}
             type="Outflow"
@@ -391,7 +421,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2 space-y-4">
           <div>
             <h3 className="font-display font-bold text-slate-800">Arus Pendapatan & Pengeluaran</h3>
-            <p className="text-xs text-slate-500">Perbandingan pemasukan vs pengeluaran langsung antar 4 unit proyek greenhouse.</p>
+            <p className="text-xs text-slate-500">Perbandingan pemasukan vs pengeluaran langsung antar semua unit proyek greenhouse.</p>
           </div>
 
           <div className="pt-4 space-y-6">
@@ -404,12 +434,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
                 <div key={p.name} className="space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-1.5">
-                      <span className={`w-2.5 h-2.5 rounded-full ${
-                        p.name === 'Melon' ? 'bg-emerald-500' :
-                        p.name === 'Cabe' ? 'bg-amber-500' :
-                        p.name === 'Perikanan' ? 'bg-blue-500' :
-                        'bg-purple-500'
-                      }`}></span>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getProjectHexColor(p.name) }}></span>
                       <span className="text-xs font-semibold text-slate-700 font-display">Proyek {p.name}</span>
                       <span className="text-[10px] text-slate-400">({p.count} tx)</span>
                     </div>
@@ -560,12 +585,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
                   <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{formatIndonesianDate(t.date)}</td>
                     <td className="py-3.5 px-4">
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                        t.project === 'Melon' ? 'bg-emerald-50 text-emerald-700' :
-                        t.project === 'Cabe' ? 'bg-amber-50 text-amber-700' :
-                        t.project === 'Perikanan' ? 'bg-blue-50 text-blue-700' :
-                        'bg-purple-50 text-purple-700'
-                      }`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold ${getProjectBadgeClass(t.project)}`}>
                         {t.project}
                       </span>
                     </td>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Transaction, Project, Role, User } from '../types';
 import { isTxApproved } from '../utils/approvalHelper';
 import { addActivityLog } from '../utils/activityLogger';
+import { getProjectBadgeClass } from './DashboardView';
 import { 
   CheckSquare, Search, SlidersHorizontal, Sliders, AlertCircle, 
   HelpCircle, Image, Check, Clock, ShieldAlert, Lock, Unlock, RefreshCw 
@@ -311,12 +312,7 @@ export default function ReconciliationView({
 
                       {/* PROJECT */}
                       <td className="py-4 px-4">
-                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold border ${
-                          tx.project === 'Melon' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
-                          tx.project === 'Cabe' ? 'bg-amber-50 border-amber-100 text-amber-700' :
-                          tx.project === 'Perikanan' ? 'bg-blue-50 border-blue-100 text-blue-700' :
-                          'bg-purple-50 border-purple-100 text-purple-705'
-                        }`}>
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold border ${getProjectBadgeClass(tx.project)}`}>
                           {tx.project}
                         </span>
                       </td>
