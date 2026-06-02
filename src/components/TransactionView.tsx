@@ -7,7 +7,7 @@ import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 import { 
   Plus, Search, Trash2, Edit, X, Save, 
   Printer, ChevronLeft, ChevronRight, Check, AlertTriangle, Image, Loader2,
-  Camera, VideoOff, RefreshCw, Calendar, Database, Lock, Unlock
+  Camera, VideoOff, RefreshCw, Calendar, Database, Lock, Unlock, History, Clock
 } from 'lucide-react';
 
 import { getProjectBadgeClass } from './DashboardView';
@@ -88,6 +88,28 @@ const formatIndonesianDate = (dateStr: string): string => {
   return `${day}-${monthName}-${year}`;
 };
 
+// Utility: Format ISO string to complete Indonesian dd mmm yyyy, hh:mm:ss WIB format
+const formatIndonesianDateTime = (isoStr: string): string => {
+  if (!isoStr) return '-';
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const year = d.getFullYear();
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const monthName = months[d.getMonth()];
+    const day = d.getDate();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${day} ${monthName} ${year}, ${hours}:${minutes}:${seconds} WIB`;
+  } catch (e) {
+    return isoStr;
+  }
+};
+
 // Helper to format string with Indonesian thousand separator
 const formatThousand = (val: string): string => {
   const clean = val.replace(/\./g, '').replace(/[^0-9]/g, '');
@@ -164,6 +186,7 @@ export default function TransactionView({
   
   // States/Approved handler
   const [txApprovedUpdatingId, setTxApprovedUpdatingId] = useState<string | null>(null);
+  const [activeHistoryTx, setActiveHistoryTx] = useState<Transaction | null>(null);
 
   const handleToggleApprove = async (tx: Transaction) => {
     if (currentRole !== 'Finance' && currentRole !== 'Admin') {
@@ -181,9 +204,31 @@ export default function TransactionView({
 
     setTxApprovedUpdatingId(tx.id);
     const nextApprovedState = !isCurrentlyApproved;
+
+    const newEntry = {
+      editedAt: new Date().toISOString(),
+      editedBy: `${currentUser} (${currentRole})`,
+      changes: `Persetujuan: dari "${isCurrentlyApproved ? 'DISETUJUI' : 'BELUM DISETUJUI'}" menjadi "${nextApprovedState ? 'DISETUJUI' : 'BELUM DISETUJUI'}"`
+    };
+
+    let prevHistory = [];
+    if (tx.editHistory) {
+      try {
+        prevHistory = JSON.parse(tx.editHistory);
+        if (!Array.isArray(prevHistory)) {
+          prevHistory = [];
+        }
+      } catch (e) {
+        prevHistory = [];
+      }
+    }
+    const updatedHistory = [newEntry, ...prevHistory];
+    const updatedHistoryString = JSON.stringify(updatedHistory);
+
     const updatedTx: Transaction = {
       ...tx,
-      isApproved: nextApprovedState
+      isApproved: nextApprovedState,
+      editHistory: updatedHistoryString
     };
 
     try {
@@ -574,23 +619,9 @@ export default function TransactionView({
 
     const oldTx = isEditing ? transactions.find(t => t.id === editingId) : undefined;
 
-    const txData: Transaction = {
-      id: txId,
-      date: formDate,
-      project: formProject,
-      type: formType,
-      category: finalCategory,
-      amount: Number(formAmount),
-      description: formDescription.trim(),
-      recordedBy: isEditing ? currentRole : currentUser,
-      createdAt: isEditing ? (oldTx?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-      account: formAccount,
-      image: formImage,
-      isLocked: isEditing ? oldTx?.isLocked : undefined,
-      isApproved: isEditing ? oldTx?.isApproved : (currentRole !== 'Pengelola')
-    };
-
     let detailChanges = '';
+    let updatedHistoryString = oldTx?.editHistory || '';
+
     if (isEditing && oldTx) {
       const changes: string[] = [];
       if (oldTx.date !== formDate) {
@@ -617,10 +648,48 @@ export default function TransactionView({
       
       if (changes.length > 0) {
         detailChanges = `${currentRole} mengubah Transaksi ${txId}: ${changes.join(', ')}`;
+        
+        const newEntry = {
+          editedAt: new Date().toISOString(),
+          editedBy: `${currentUser} (${currentRole})`,
+          changes: changes.join(', ')
+        };
+
+        let prevHistory = [];
+        if (oldTx.editHistory) {
+          try {
+            prevHistory = JSON.parse(oldTx.editHistory);
+            if (!Array.isArray(prevHistory)) {
+              prevHistory = [];
+            }
+          } catch (e) {
+            prevHistory = [];
+          }
+        }
+        
+        const updatedHistory = [newEntry, ...prevHistory];
+        updatedHistoryString = JSON.stringify(updatedHistory);
       } else {
         detailChanges = `${currentRole} menyimpan ulang Transaksi ${txId} tanpa perubahan data`;
       }
     }
+
+    const txData: Transaction = {
+      id: txId,
+      date: formDate,
+      project: formProject,
+      type: formType,
+      category: finalCategory,
+      amount: Number(formAmount),
+      description: formDescription.trim(),
+      recordedBy: isEditing ? (oldTx?.recordedBy || currentRole) : currentUser,
+      createdAt: isEditing ? (oldTx?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      account: formAccount,
+      image: formImage,
+      isLocked: isEditing ? oldTx?.isLocked : undefined,
+      isApproved: isEditing ? oldTx?.isApproved : (currentRole !== 'Pengelola'),
+      editHistory: updatedHistoryString
+    };
 
     // Begin Submission Progress State Stream (Tampilkan progres input transaksi)
     setIsSubmitting(true);
@@ -1471,8 +1540,35 @@ export default function TransactionView({
                       <td className="py-4 px-4 text-right font-mono font-bold text-rose-600">
                         {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
                       </td>
-                      <td className="py-4 px-4 text-slate-600 max-w-xs break-words whitespace-normal" title={t.description}>
-                        <span>{t.description}</span>
+                      <td className="py-4 px-4 text-slate-600 max-w-xs break-words whitespace-normal animate-none" title={t.description}>
+                        <div className="flex flex-col gap-1.5 justify-start items-start">
+                          <span className="font-medium text-slate-800">{t.description}</span>
+                          {(() => {
+                            let history = [];
+                            if (t.editHistory) {
+                              try {
+                                history = JSON.parse(t.editHistory);
+                              } catch (e) {
+                                history = [];
+                              }
+                            }
+                            const isApproved = isTxApproved(t);
+                            if (Array.isArray(history) && history.length > 0 && isApproved) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveHistoryTx(t)}
+                                  className="inline-flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-250 transition-all cursor-pointer shadow-3xs hover:scale-105 active:scale-95 whitespace-nowrap"
+                                  title="Klik untuk melihat riwayat perubahan & persetujuan"
+                                >
+                                  <History className="w-2.5 h-2.5 text-amber-600 animate-spin-slow" />
+                                  <span>Diedit ({history.length}x) & Disetujui</span>
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
                       </td>
                       <td className="py-4 px-4 font-medium text-slate-500 text-[11px]">
                         <span className="px-2 py-0.5 bg-slate-50 rounded-full border border-slate-105 text-slate-600 font-mono capitalize">
@@ -2091,6 +2187,164 @@ export default function TransactionView({
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs transition-colors cursor-pointer"
               >
                 Tutup Pratinjau
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit History Log Modal / Kartu Keterangan Edit */}
+      {activeHistoryTx && (
+        <div 
+          className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-55 animate-fade-in no-print"
+          onClick={() => setActiveHistoryTx(null)}
+        >
+          <div 
+            className="bg-white max-w-2xl w-full rounded-2xl overflow-hidden shadow-2xl relative animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-850 flex items-center gap-2">
+                <History className="w-4 h-4 text-amber-600" />
+                Riwayat Perubahan Transaksi
+              </h3>
+              <button
+                onClick={() => setActiveHistoryTx(null)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Transaction summary card */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 text-xs">
+              <div className="grid grid-cols-2 gap-4 text-slate-600">
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">ID Transaksi</p>
+                  <p className="font-mono font-bold text-slate-800">{activeHistoryTx.id}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Proyek</p>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 mt-0.5 rounded text-[10px] font-semibold ${getProjectBadgeClass(activeHistoryTx.project)}`}>
+                    {activeHistoryTx.project}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Keterangan Sekarang</p>
+                  <p className="font-medium text-slate-800 line-clamp-2">{activeHistoryTx.description}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Nominal Sekarang</p>
+                  <p className={`font-mono font-extrabold text-[13px] ${activeHistoryTx.type === 'Inflow' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {activeHistoryTx.type === 'Inflow' ? '+' : '-'} Rp {activeHistoryTx.amount.toLocaleString('id-ID')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* History Events list */}
+            <div className="p-6 max-h-[50vh] overflow-y-auto bg-white">
+              {(() => {
+                let historyList = [];
+                try {
+                  historyList = JSON.parse(activeHistoryTx.editHistory || '[]');
+                } catch (e) {
+                  historyList = [];
+                }
+
+                if (historyList.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-slate-400">
+                      <Clock className="w-8 h-8 text-slate-350 mx-auto mb-2 animate-pulse" />
+                      <p className="text-xs font-semibold">Tidak ada riwayat perubahan yang tercatat.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="relative border-l border-slate-150 pl-4 ml-2 space-y-6">
+                    {historyList.map((entry: any, entryIdx: number) => {
+                      const changeItems = entry.changes ? entry.changes.split(', ') : [];
+                      return (
+                        <div key={entryIdx} className="relative group">
+                          {/* Bullet marker */}
+                          <span className="absolute -left-[21px] top-1.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-500 ring-4 ring-white"></span>
+                          
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] mb-1.5">
+                            <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>{formatIndonesianDateTime(entry.editedAt)}</span>
+                            </div>
+                            <div className="inline-flex self-start sm:self-auto items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-150 text-slate-700">
+                              Oleh: {entry.editedBy}
+                            </div>
+                          </div>
+
+                          {/* Changes list in card */}
+                          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 space-y-2.5 shadow-3xs">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Rincian Perubahan:</p>
+                            {changeItems.map((change: string, changeIdx: number) => {
+                              let formattedChange: React.ReactNode = change;
+                              if (change.includes(' dari "') && change.includes('" menjadi "')) {
+                                const match = change.match(/(.*) dari "(.*)" menjadi "(.*)"/);
+                                if (match) {
+                                  const label = match[1];
+                                  const fromVal = match[2];
+                                  const toVal = match[3];
+                                  formattedChange = (
+                                    <div className="flex flex-col gap-0.5 text-slate-600">
+                                      <span className="capitalize font-bold text-slate-700 text-[10.5px] leading-none mb-1">{label}</span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="line-through text-slate-400 bg-slate-100 px-2 py-0.5 rounded text-[10px]">{fromVal}</span>
+                                        <span className="text-slate-400 text-[10px] font-bold">➜</span>
+                                        <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-[10px]">{toVal}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              } else if (change.includes(' dari ') && change.includes(' menjadi ')) {
+                                const match = change.match(/(.*) dari (.*) menjadi (.*)/);
+                                if (match) {
+                                  const label = match[1];
+                                  const fromVal = match[2];
+                                  const toVal = match[3];
+                                  formattedChange = (
+                                    <div className="flex flex-col gap-0.5 text-slate-600">
+                                      <span className="capitalize font-bold text-slate-700 text-[10.5px] leading-none mb-1">{label}</span>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="line-through text-slate-400 bg-slate-100 px-2 py-0.5 rounded text-[10px]">{fromVal}</span>
+                                        <span className="text-slate-400 text-[10px] font-bold">➜</span>
+                                        <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 text-[10px]">{toVal}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              }
+                              
+                              return (
+                                <div key={changeIdx} className="border-b border-dashed border-slate-200 pb-2 last:border-b-0 last:pb-0 text-xs">
+                                  {formattedChange}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center text-[10px]">
+              <span className="text-slate-400 font-mono">Diperbarui real-time dari riwayat aktivitas</span>
+              <button
+                onClick={() => setActiveHistoryTx(null)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Tutup Riwayat
               </button>
             </div>
           </div>

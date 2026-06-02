@@ -9,6 +9,12 @@ export type TransactionType = 'Inflow' | 'Outflow';
 
 export type FinancialCategory = 'Operational' | 'Non-Operational';
 
+export interface EditHistoryEntry {
+  editedAt: string; // ISO date-time
+  editedBy: string; // display name (e.g. "admin (Admin)")
+  changes: string; // summary of changes
+}
+
 export interface Transaction {
   id: string;
   date: string; // YYYY-MM-DD
@@ -23,6 +29,7 @@ export interface Transaction {
   image?: string; // Google Drive url or base64 evidence
   isLocked?: boolean | string; // Lock status details
   isApproved?: boolean | string; // Approval status details
+  editHistory?: string; // Serialized EditHistoryEntry[] or JSON string representing the history of edits
 }
 
 export type Role = 'Admin' | 'Pengelola' | 'Finance' | 'Accounting';

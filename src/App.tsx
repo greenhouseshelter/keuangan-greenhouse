@@ -17,10 +17,11 @@ import ChangePasswordView from './components/ChangePasswordView';
 import AdminLogsView from './components/AdminLogsView';
 import SystemSettingsView from './components/SystemSettingsView';
 import ReconciliationView from './components/ReconciliationView';
+import BalanceSheetView from './components/BalanceSheetView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff, AlertTriangle, Settings, CheckSquare
+  Eye, EyeOff, AlertTriangle, Settings, CheckSquare, Scale
 } from 'lucide-react';
 
 const GOOGLE_APPS_SCRIPT_CODE = `// GOOGLE APPS SCRIPT DATABASE CONNECTOR (Code.gs)
@@ -674,6 +675,7 @@ export default function App() {
     }
 
     if (role === 'Admin' || role === 'Accounting') {
+      items.push({ id: 'neraca', name: 'Neraca Keuangan', icon: Scale });
       items.push({ id: 'analisis', name: 'Asisten Analisis AI', icon: BrainCircuit });
     }
 
@@ -1393,11 +1395,16 @@ export default function App() {
               usersList={usersList}
               onUpdateTransaction={handleUpdateTx}
               currentRole={currentUser.role}
+              currentUser={currentUser.username}
             />
           )}
 
           {activeTab === 'laporan' && (
             <ReportsView transactions={transactions} />
+          )}
+
+          {activeTab === 'neraca' && (currentUser.role === 'Admin' || currentUser.role === 'Accounting') && (
+            <BalanceSheetView transactions={transactions} />
           )}
 
           {activeTab === 'analisis' && (

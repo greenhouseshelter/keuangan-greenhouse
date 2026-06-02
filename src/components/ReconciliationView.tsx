@@ -13,13 +13,15 @@ interface ReconciliationViewProps {
   usersList: User[];
   onUpdateTransaction: (tx: Transaction) => Promise<boolean>;
   currentRole: Role;
+  currentUser?: string;
 }
 
 export default function ReconciliationView({ 
   transactions, 
   usersList, 
   onUpdateTransaction,
-  currentRole
+  currentRole,
+  currentUser = 'System'
 }: ReconciliationViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [projectFilter, setProjectFilter] = useState<Project | 'All'>('All');
@@ -58,9 +60,31 @@ export default function ReconciliationView({
 
     setUpdatingId(tx.id);
     const nextApprovedState = !isCurrentlyApproved;
+
+    const newEntry = {
+      editedAt: new Date().toISOString(),
+      editedBy: `${currentUser} (${currentRole})`,
+      changes: `Persetujuan: dari "${isCurrentlyApproved ? 'DISETUJUI' : 'BELUM DISETUJUI'}" menjadi "${nextApprovedState ? 'DISETUJUI' : 'BELUM DISETUJUI'}"`
+    };
+
+    let prevHistory = [];
+    if (tx.editHistory) {
+      try {
+        prevHistory = JSON.parse(tx.editHistory);
+        if (!Array.isArray(prevHistory)) {
+          prevHistory = [];
+        }
+      } catch (e) {
+        prevHistory = [];
+      }
+    }
+    const updatedHistory = [newEntry, ...prevHistory];
+    const updatedHistoryString = JSON.stringify(updatedHistory);
+
     const updatedTx: Transaction = {
       ...tx,
-      isApproved: nextApprovedState
+      isApproved: nextApprovedState,
+      editHistory: updatedHistoryString
     };
 
     try {
