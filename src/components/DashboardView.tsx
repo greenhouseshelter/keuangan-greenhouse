@@ -71,7 +71,9 @@ function ProjectPieChart({
   const activeData = data.filter(d => d.amount > 0);
   const [hoveredName, setHoveredName] = useState<string | null>(null);
   
-  if (totalAmount === 0 || activeData.length === 0) {
+  const chartTotal = activeData.reduce((sum, d) => sum + d.amount, 0);
+  
+  if (chartTotal === 0 || activeData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 h-52">
         <span className="text-xs text-slate-400 font-semibold tracking-wide">
@@ -81,84 +83,94 @@ function ProjectPieChart({
     );
   }
 
-  const radius = 35;
-  const strokeWidth = 10;
-  const circumference = 2 * Math.PI * radius; // Approx 219.91
-  
-  // Pre-calculate segments cleanly without render-time side effects
-  let runningPercent = 0;
-  const segments = activeData.map((slice) => {
-    const percent = slice.amount / totalAmount;
-    const strokeLength = percent * circumference;
-    const strokeOffset = circumference - (runningPercent * circumference);
-    runningPercent += percent;
+  const baseRadius = 42;
+  const numRings = activeData.length;
+  const spacing = numRings > 1 ? Math.min(7.5, 18 / (numRings - 1)) : 0;
+  const strokeWidth = numRings > 4 ? 3.5 : 4.5;
+
+  const segments = activeData.map((slice, i) => {
+    const percentage = chartTotal > 0 ? (slice.amount / chartTotal) : 0;
+    const ringRadius = baseRadius - (i * spacing);
+    const circumference = 2 * Math.PI * ringRadius;
+    const strokeLength = percentage * circumference;
+    const strokeOffset = circumference - strokeLength;
     return {
       ...slice,
-      percent,
+      percentage,
+      ringRadius,
+      circumference,
       strokeLength,
       strokeOffset,
     };
   });
 
   const activeHoveredSlice = hoveredName ? activeData.find(d => d.name === hoveredName) : null;
-  const activeHoveredPercent = activeHoveredSlice ? (activeHoveredSlice.amount / totalAmount) * 100 : 0;
+  const activeHoveredPercent = activeHoveredSlice ? (activeHoveredSlice.amount / chartTotal) * 100 : 0;
 
   return (
     <div className="bg-slate-50/30 hover:bg-slate-50/70 p-5 rounded-2xl border border-slate-150 transition-all duration-300 flex flex-col md:flex-row items-center gap-6 justify-center w-full shadow-xs">
-      {/* SVG Donut Container with Hover Dynamics */}
-      <div className="relative w-32 h-32 flex-shrink-0 select-none">
+      {/* SVG Concentric Donut Container with Hover Dynamics */}
+      <div className="relative w-36 h-36 flex-shrink-0 select-none">
         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-          <circle
-            cx="50"
-            cy="50"
-            r={radius}
-            fill="transparent"
-            stroke="#f1f5f9"
-            strokeWidth={strokeWidth}
-          />
           {segments.map((slice) => {
             const isHovered = hoveredName === slice.name;
             const isAnyHovered = hoveredName !== null;
             return (
-              <circle
-                key={slice.name}
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="transparent"
-                stroke={slice.color}
-                strokeWidth={isHovered ? strokeWidth + 3.5 : strokeWidth}
-                strokeDasharray={`${slice.strokeLength} ${circumference}`}
-                strokeDashoffset={slice.strokeOffset}
-                strokeLinecap={activeData.length > 1 ? 'butt' : 'round'}
-                onMouseEnter={() => setHoveredName(slice.name)}
-                onMouseLeave={() => setHoveredName(null)}
-                className="cursor-pointer transition-all duration-300 origin-center"
-                style={{ 
-                  transformOrigin: '50% 50%',
-                  transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                  opacity: isAnyHovered ? (isHovered ? 1 : 0.45) : 1,
-                  filter: isHovered ? 'drop-shadow(0px 0px 4px rgba(0,0,0,0.15))' : 'none'
-                }}
-              />
+              <g key={slice.name}>
+                {/* Background Track Circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={slice.ringRadius}
+                  fill="transparent"
+                  stroke="#e2e8f0"
+                  strokeWidth={strokeWidth}
+                  className="opacity-40 transition-opacity duration-300"
+                  style={{
+                    opacity: isAnyHovered ? (isHovered ? 0.6 : 0.2) : 0.4
+                  }}
+                />
+                {/* Concentric Progress Circle */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={slice.ringRadius}
+                  fill="transparent"
+                  stroke={slice.color}
+                  strokeWidth={isHovered ? strokeWidth + 2 : strokeWidth}
+                  strokeDasharray={`${slice.circumference}`}
+                  strokeDashoffset={slice.strokeOffset}
+                  strokeLinecap="round"
+                  onMouseEnter={() => setHoveredName(slice.name)}
+                  onMouseLeave={() => setHoveredName(null)}
+                  className="cursor-pointer transition-all duration-300 origin-center"
+                  style={{ 
+                    transformOrigin: '50% 50%',
+                    transform: isHovered ? 'scale(1.02)' : 'scale(1)',
+                    opacity: isAnyHovered ? (isHovered ? 1 : 0.45) : 0.95,
+                    filter: isHovered ? `drop-shadow(0px 0px 3px ${slice.color}44)` : 'none'
+                  }}
+                />
+              </g>
             );
           })}
         </svg>
         
         {/* Absolute Centered Legend Text - Dynamic based on hovering */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-2 pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-2.5 pointer-events-none">
           {activeHoveredSlice ? (
             <div className="animate-fade-in flex flex-col items-center justify-center">
               <span 
-                className="text-[8px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full mb-0.5 inline-block text-white" 
+                className="text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full mb-0.5 inline-block text-white font-sans max-w-[85px] truncate" 
                 style={{ backgroundColor: activeHoveredSlice.color }}
+                title={activeHoveredSlice.name}
               >
-                {activeHoveredSlice.name.substring(0, 10)}
+                {activeHoveredSlice.name}
               </span>
-              <span className="text-[11px] font-extrabold text-slate-800 font-mono">
+              <span className="text-[14px] font-black text-slate-800 font-mono leading-none my-0.5">
                 {activeHoveredPercent.toFixed(1)}%
               </span>
-              <span className="text-[9px] text-slate-400 font-bold font-mono">
+              <span className="text-[9.5px] text-slate-500 font-bold font-mono leading-none">
                 {activeHoveredSlice.amount >= 1000000 
                   ? `Rp ${(activeHoveredSlice.amount / 1000000).toFixed(1)}Jt` 
                   : `Rp ${(activeHoveredSlice.amount / 1000).toFixed(0)}rb`}
@@ -166,14 +178,14 @@ function ProjectPieChart({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center">
-              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest leading-none">TOTAL</span>
-              <span className="text-xs font-black text-slate-700 font-mono mt-1" title={`Rp ${totalAmount.toLocaleString('id-ID')}`}>
-                {totalAmount >= 1000000 
-                  ? `Rp ${(totalAmount / 1000000).toFixed(1)}Jt` 
-                  : `Rp ${(totalAmount / 1000).toFixed(0)}rb`}
+              <span className="text-[8.5px] text-slate-400 font-bold uppercase tracking-widest leading-none">TOTAL</span>
+              <span className="text-[13px] font-black text-slate-700 font-mono mt-1" title={`Rp ${chartTotal.toLocaleString('id-ID')}`}>
+                {chartTotal >= 1000000 
+                  ? `Rp ${(chartTotal / 1000000).toFixed(1)}Jt` 
+                  : `Rp ${(chartTotal / 1000).toFixed(0)}rb`}
               </span>
               <span className="text-[7.5px] text-slate-400 font-semibold uppercase mt-0.5 tracking-wider">
-                {type === 'Inflow' ? 'In-Flow' : 'Out-Flow'}
+                {type === 'Inflow' ? 'Pemasukan' : 'Pengeluaran'}
               </span>
             </div>
           )}
@@ -189,7 +201,7 @@ function ProjectPieChart({
           {data.map((item) => {
             const isHovered = hoveredName === item.name;
             const isAnyHovered = hoveredName !== null;
-            const percentage = totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0;
+            const percentage = chartTotal > 0 ? (item.amount / chartTotal) * 100 : 0;
             return (
               <div 
                 key={item.name} 
@@ -197,7 +209,7 @@ function ProjectPieChart({
                 onMouseLeave={() => setHoveredName(null)}
                 className={`group px-2 py-1.5 rounded-xl border transition-all duration-300 cursor-pointer ${
                   isHovered 
-                    ? 'bg-slate-50 border-slate-200/80 shadow-xs scale-[1.01]' 
+                    ? 'bg-slate-100/50 border-slate-200/80 shadow-xs scale-[1.01]' 
                     : 'bg-transparent border-transparent'
                 }`}
                 style={{
@@ -207,7 +219,7 @@ function ProjectPieChart({
                 <div className="flex items-center justify-between text-xs mb-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span 
-                      className="w-2 h-2 rounded-full shrink-0 shadow-xs group-hover:scale-110 transition-transform" 
+                      className="w-2.5 h-1 rounded-full shrink-0 shadow-xs group-hover:scale-y-125 transition-transform" 
                       style={{ backgroundColor: item.color }} 
                     />
                     <span className="text-slate-600 font-bold truncate text-[11px] group-hover:text-slate-900 transition-colors">
