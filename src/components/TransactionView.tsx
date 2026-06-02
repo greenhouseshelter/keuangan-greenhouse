@@ -439,6 +439,7 @@ export default function TransactionView({
   const [formType, setFormType] = useState<TransactionType>('Outflow');
   const [formCategory, setFormCategory] = useState<FinancialCategory>('Operational');
   const [formAmount, setFormAmount] = useState<number | ''>('');
+  const [formWeight, setFormWeight] = useState<number | ''>('');
   const [formDescription, setFormDescription] = useState('');
   const [formAccount, setFormAccount] = useState('');
 
@@ -493,6 +494,7 @@ export default function TransactionView({
     setFormCategory('Operational');
     setFormAmount('');
     setFormDescription('');
+    setFormWeight('');
     setFormImage('');
     setFormImage2('');
     setFormError('');
@@ -588,6 +590,7 @@ export default function TransactionView({
     setFormAmount(tx.amount);
     setFormDescription(tx.description);
     setFormAccount(tx.account || '');
+    setFormWeight(tx.weight ?? '');
     setFormImage(tx.image || '');
     setFormImage2(tx.image2 || '');
     setShowForm(true);
@@ -610,6 +613,14 @@ export default function TransactionView({
     if (!formAccount) {
       setFormError('Silakan pilih salah satu akun keuangan.');
       return;
+    }
+
+    const isSalesAccount = formAccount.toLowerCase().includes('penjualan');
+    if (isSalesAccount) {
+      if (formWeight === '' || Number(formWeight) <= 0) {
+        setFormError('Lengkapi nilai Berat dalam kg untuk transaksi akun Penjualan.');
+        return;
+      }
     }
 
     // Required image validation check based on the active role and policy (minimal 1 gambar)
@@ -657,6 +668,14 @@ export default function TransactionView({
       if (oldTx.account !== formAccount) {
         changes.push(`akun COA dari "${oldTx.account}" menjadi "${formAccount}"`);
       }
+      
+      const newWeightVal = isSalesAccount ? Number(formWeight) : undefined;
+      if (oldTx.weight !== newWeightVal) {
+        const oldWStr = oldTx.weight !== undefined && oldTx.weight !== null ? `${oldTx.weight} kg` : 'kosong';
+        const newWStr = newWeightVal !== undefined ? `${newWeightVal} kg` : 'kosong';
+        changes.push(`berat dari "${oldWStr}" menjadi "${newWStr}"`);
+      }
+
       if (oldTx.image !== formImage || oldTx.image2 !== formImage2) {
         changes.push(`lampiran gambar diubah`);
       }
@@ -700,6 +719,7 @@ export default function TransactionView({
       recordedBy: isEditing ? (oldTx?.recordedBy || currentRole) : currentUser,
       createdAt: isEditing ? (oldTx?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       account: formAccount,
+      weight: isSalesAccount ? Number(formWeight) : undefined,
       image: formImage,
       image2: formImage2,
       isLocked: isEditing ? oldTx?.isLocked : undefined,
@@ -1334,6 +1354,7 @@ export default function TransactionView({
                 {renderSortableHeader('account', 'Akun (COA)')}
                 {renderSortableHeader('inflow', 'Uang Masuk', 'text-right')}
                 {renderSortableHeader('outflow', 'Uang Keluar', 'text-right')}
+                {renderSortableHeader('weight', 'Berat (kg)', 'text-center')}
                 {renderSortableHeader('description', 'Keterangan')}
                 {renderSortableHeader('recordedBy', 'Dicatat Oleh')}
                 <th className="py-3 px-4 text-center font-semibold text-[10px] tracking-wider uppercase font-display">Bukti</th>
@@ -1459,6 +1480,7 @@ export default function TransactionView({
                     </div>
                   </div>
                 </td>
+                <td className="py-1 px-2 text-center text-slate-350 text-[10px] font-bold select-none">-</td>
                 <td className="py-1 px-2">
                   <input
                     type="text"
@@ -1487,7 +1509,7 @@ export default function TransactionView({
             <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={13} className="py-12 text-center text-slate-400 font-medium">
                     Tidak ditemukan pencatatan transaksi yang cocok dengan pencarian Anda.
                   </td>
                 </tr>
@@ -1555,6 +1577,9 @@ export default function TransactionView({
                       </td>
                       <td className="py-4 px-4 text-right font-mono font-bold text-rose-600">
                         {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
+                      </td>
+                      <td className="py-4 px-4 text-center font-mono font-bold text-slate-700 text-xs">
+                        {t.account?.toLowerCase().includes('penjualan') && t.weight !== undefined && t.weight !== null ? `${t.weight} kg` : '-'}
                       </td>
                       <td className="py-4 px-4 text-slate-600 max-w-xs break-words whitespace-normal animate-none" title={t.description}>
                         <div className="flex flex-col gap-1.5 justify-start items-start">
@@ -1934,6 +1959,29 @@ export default function TransactionView({
                         </span>
                       )}
                     </div>
+
+                    {/* Weight (Kg) khusus untuk transaksi Penjualan */}
+                    {formAccount?.toLowerCase().includes('penjualan') && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1">
+                        <label className="block text-slate-500 font-semibold uppercase text-[10px]">Berat Hasil Panen (kg)</label>
+                        <div className="relative">
+                          <input 
+                            type="number" 
+                            step="any"
+                            placeholder="Contoh: 120.5 (Berat dalam kg)..." 
+                            value={formWeight}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setFormWeight(v !== '' ? parseFloat(v) : '');
+                            }}
+                            required
+                            className="w-full pr-12 pl-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-slate-950 font-mono font-bold text-xs"
+                          />
+                          <span className="absolute inset-y-0 right-3 flex items-center font-bold text-slate-400 text-[11px] select-none">kg</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 italic font-medium">*Khusus akun penjualan, kolom berat wajib diisi lengkap.</p>
+                      </div>
+                    )}
 
                     {/* Amount */}
                     <div>

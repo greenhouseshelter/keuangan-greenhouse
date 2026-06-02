@@ -26,6 +26,7 @@ export interface Transaction {
   recordedBy: string; // username of the recorder
   createdAt: string; // ISO date-time
   account: string; // Name of the financial account/akun
+  weight?: number; // Weight in kg, specifically for sales/Penjualan
   image?: string; // Google Drive url or base64 evidence
   image2?: string; // Second Google Drive url or base64 evidence
   isLocked?: boolean | string; // Lock status details
