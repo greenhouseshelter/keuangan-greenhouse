@@ -27,6 +27,7 @@ export interface Transaction {
   createdAt: string; // ISO date-time
   account: string; // Name of the financial account/akun
   image?: string; // Google Drive url or base64 evidence
+  image2?: string; // Second Google Drive url or base64 evidence
   isLocked?: boolean | string; // Lock status details
   isApproved?: boolean | string; // Approval status details
   editHistory?: string; // Serialized EditHistoryEntry[] or JSON string representing the history of edits

@@ -275,6 +275,8 @@ export default function TransactionView({
   // Settings & attachment upload states
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({ imageRequiredIn: false, imageRequiredOut: false });
   const [formImage, setFormImage] = useState<string>('');
+  const [formImage2, setFormImage2] = useState<string>('');
+  const [cameraSlot, setCameraSlot] = useState<1 | 2>(1);
   const [isDragging, setIsDragging] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -371,7 +373,11 @@ export default function TransactionView({
 
       // High-quality JPEG compression under 200kb
       const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-      setFormImage(dataUrl);
+      if (cameraSlot === 1) {
+        setFormImage(dataUrl);
+      } else {
+        setFormImage2(dataUrl);
+      }
       
       // Stop webcam and cleanup
       stopCamera();
@@ -383,7 +389,7 @@ export default function TransactionView({
     }
   };
 
-  const handleImageFile = async (file: File) => {
+  const handleImageFile = async (file: File, slot: 1 | 2 = 1) => {
     if (!file.type.startsWith('image/')) {
       alert('File yang dipilih harus berupa gambar (JPEG/PNG/JPG).');
       return;
@@ -396,7 +402,11 @@ export default function TransactionView({
     setCompressing(true);
     try {
       const base64 = await compressImageToBase64(file);
-      setFormImage(base64);
+      if (slot === 1) {
+        setFormImage(base64);
+      } else {
+        setFormImage2(base64);
+      }
     } catch (err) {
       console.error('Gagal memproses gambar:', err);
       alert('Gagal memproses file gambar. Silakan coba file gambar lainnya.');
@@ -484,6 +494,7 @@ export default function TransactionView({
     setFormAmount('');
     setFormDescription('');
     setFormImage('');
+    setFormImage2('');
     setFormError('');
     setIsEditing(false);
     setEditingId('');
@@ -578,6 +589,7 @@ export default function TransactionView({
     setFormDescription(tx.description);
     setFormAccount(tx.account || '');
     setFormImage(tx.image || '');
+    setFormImage2(tx.image2 || '');
     setShowForm(true);
   };
 
@@ -600,13 +612,13 @@ export default function TransactionView({
       return;
     }
 
-    // Required image validation check based on the active role and policy
+    // Required image validation check based on the active role and policy (minimal 1 gambar)
     const isImageRequired = formType === 'Inflow' 
       ? systemSettings.imageRequiredIn 
       : systemSettings.imageRequiredOut;
 
-    if (isImageRequired && !formImage) {
-      setFormError(`Silakan lampirkan gambar/foto bukti transaksi untuk transaksi Uang ${formType === 'Inflow' ? 'Masuk (Inflow)' : 'Keluar (Outflow)'}.`);
+    if (isImageRequired && !formImage && !formImage2) {
+      setFormError(`Silakan lampirkan minimal 1 gambar/foto bukti transaksi untuk transaksi Uang ${formType === 'Inflow' ? 'Masuk (Inflow)' : 'Keluar (Outflow)'}.`);
       return;
     }
 
@@ -644,6 +656,9 @@ export default function TransactionView({
       }
       if (oldTx.account !== formAccount) {
         changes.push(`akun COA dari "${oldTx.account}" menjadi "${formAccount}"`);
+      }
+      if (oldTx.image !== formImage || oldTx.image2 !== formImage2) {
+        changes.push(`lampiran gambar diubah`);
       }
       
       if (changes.length > 0) {
@@ -686,6 +701,7 @@ export default function TransactionView({
       createdAt: isEditing ? (oldTx?.createdAt || new Date().toISOString()) : new Date().toISOString(),
       account: formAccount,
       image: formImage,
+      image2: formImage2,
       isLocked: isEditing ? oldTx?.isLocked : undefined,
       isApproved: isEditing ? oldTx?.isApproved : (currentRole !== 'Pengelola'),
       editHistory: updatedHistoryString
@@ -1576,18 +1592,31 @@ export default function TransactionView({
                         </span>
                       </td>
                       <td className="py-4 px-4 text-center">
-                        {t.image ? (
-                          <button
-                            onClick={() => setLightboxImage(t.image || null)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold transition-all shadow-3xs cursor-pointer active:scale-95"
-                            title="Klik untuk melihat bukti transaksi"
-                          >
-                            <Image className="w-3 h-3 text-emerald-600" />
-                            <span>Lihat Bukti</span>
-                          </button>
-                        ) : (
-                          <span className="text-slate-350 italic font-medium font-sans text-[10px]">-</span>
-                        )}
+                        <div className="flex flex-col gap-1 items-center justify-center">
+                          {t.image && (
+                            <button
+                              onClick={() => setLightboxImage(t.image || null)}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-800 rounded-lg text-[9px] font-bold transition-all shadow-3xs cursor-pointer active:scale-95"
+                              title="Klik untuk melihat bukti transaksi 1 (Utama)"
+                            >
+                              <Image className="w-3 h-3 text-emerald-600" />
+                              <span>Bukti 1</span>
+                            </button>
+                          )}
+                          {t.image2 && (
+                            <button
+                              onClick={() => setLightboxImage(t.image2 || null)}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-800 rounded-lg text-[9px] font-bold transition-all shadow-3xs cursor-pointer active:scale-95"
+                              title="Klik untuk melihat bukti transaksi 2 (Tambahan)"
+                            >
+                              <Image className="w-3 h-3 text-emerald-600" />
+                              <span>Bukti 2</span>
+                            </button>
+                          )}
+                          {!t.image && !t.image2 && (
+                            <span className="text-slate-350 italic font-medium font-sans text-[10px]">-</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 font-semibold">
@@ -1941,41 +1970,20 @@ export default function TransactionView({
                         required
                         className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-950 focus:bg-white text-xs font-medium"
                       />
-                    </div>
-
-                    {/* Bukti Transaksi (File upload with drag & drop or direct camera capture) */}
-                    <div className="space-y-1.5 pt-1.5">
-                      <div className="flex justify-between items-center">
+                                {/* Bukti Transaksi (File upload with drag & drop or direct camera capture) */}
+                    <div className="space-y-3 pt-1.5 border-t border-slate-100">
+                      <div>
                         <label className="block text-slate-500 font-semibold uppercase text-[10px]">
-                          LAMPIRAN BUKTI GAMBAR / NOTA {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && <span className="text-rose-600 font-extrabold">*Wajib</span>}
+                          LAMPIRAN BUKTI GAMBAR / NOTA {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && <span className="text-rose-600 font-extrabold">*Wajib (Minimal 1 Gambar)</span>}
                         </label>
-                        <div className="flex items-center gap-2">
-                          {!formImage && !showCamera && (
-                            <button
-                              type="button"
-                              onClick={() => startCamera(activeFacingMode)}
-                              className="text-[10px] text-emerald-700 hover:text-emerald-850 bg-emerald-50 hover:bg-emerald-100 border border-emerald-150 px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-all cursor-pointer shadow-3xs"
-                            >
-                              <Camera className="w-3 h-3" /> Ambil dari Kamera
-                            </button>
-                          )}
-                          {formImage && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFormImage('');
-                                stopCamera();
-                              }}
-                              className="text-[10px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Trash2 className="w-3 h-3" /> Hapus File
-                            </button>
-                          )}
-                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Anda dapat melampirkan minimal 1 gambar dan maksimal 2 gambar sebagai bukti lampiran.</p>
                       </div>
 
                       {showCamera ? (
-                        <div className="border border-slate-200 rounded-2xl p-3 bg-slate-950 flex flex-col items-center justify-center gap-3 overflow-hidden shadow-xs relative min-h-[220px]">
+                        <div className="border border-slate-200 rounded-2xl p-3.5 bg-slate-950 flex flex-col items-center justify-center gap-3 overflow-hidden shadow-xs relative min-h-[220px]">
+                          <div className="absolute top-2.5 left-3.5 bg-amber-500 text-slate-950 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                            Kamera Aktif: Mengambil Gambar untuk Lampiran {cameraSlot}
+                          </div>
                           {cameraError ? (
                             <div className="text-center p-4 text-white flex flex-col items-center justify-center gap-2">
                               <VideoOff className="w-8 h-8 text-rose-500" />
@@ -1990,7 +1998,7 @@ export default function TransactionView({
                             </div>
                           ) : (
                             <>
-                              <div className="relative w-full aspect-video md:max-h-48 bg-black rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
+                              <div className="relative w-full aspect-video md:max-h-48 bg-black rounded-xl overflow-hidden shadow-inner flex items-center justify-center mt-3">
                                 <video
                                   ref={videoRef}
                                   autoPlay
@@ -2018,7 +2026,7 @@ export default function TransactionView({
                                   className="flex items-center justify-center gap-1.5 px-4.5 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white font-extrabold rounded-xl text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
                                 >
                                   <Camera className="w-4 h-4" />
-                                  <span>Ambil Foto</span>
+                                  <span>Simpan Lampiran {cameraSlot}</span>
                                 </button>
                                 
                                 <button
@@ -2042,79 +2050,185 @@ export default function TransactionView({
                             </>
                           )}
                         </div>
-                      ) : formImage ? (
-                        <div className="relative border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 h-32 flex items-center justify-center group shadow-2xs">
-                          <img 
-                            src={formImage} 
-                            alt="Preview Bukti" 
-                            className="h-full object-contain"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setLightboxImage(formImage)}
-                              className="px-3 py-1.5 bg-white font-bold text-slate-900 rounded-lg text-[10px] hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
-                            >
-                              Tinjau Bukti
-                            </button>
-                          </div>
-                        </div>
                       ) : (
-                        <div
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            setIsDragging(true);
-                          }}
-                          onDragLeave={() => setIsDragging(false)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setIsDragging(false);
-                            const file = e.dataTransfer.files?.[0];
-                            if (file) handleImageFile(file);
-                          }}
-                          onClick={() => document.getElementById('evidence-file-input')?.click()}
-                          className={`border-2 border-dashed rounded-2xl p-5 text-center flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-                            isDragging 
-                              ? 'border-slate-900 bg-slate-55' 
-                              : 'border-slate-200 bg-slate-50/60 hover:bg-slate-55'
-                          }`}
-                        >
-                          <input 
-                            type="file" 
-                            id="evidence-file-input"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleImageFile(file);
-                            }}
-                            className="hidden"
-                          />
-                          {compressing ? (
-                            <Loader2 className="w-5 h-5 text-slate-900 animate-spin" />
-                          ) : (
-                            <div className="p-2 bg-white border border-slate-100 rounded-xl shadow-3xs text-slate-400 shrink-0">
-                              <Plus className="w-4 h-4 text-slate-500" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          {/* Slot 1: Gambar Utama */}
+                          <div className="border border-slate-200/85 rounded-2xl p-3 bg-slate-50/55 space-y-2.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Gambar 1 (Utama)</span>
+                              <div className="flex items-center gap-1.5">
+                                {!formImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCameraSlot(1);
+                                      startCamera(activeFacingMode);
+                                    }}
+                                    className="text-[9px] text-emerald-700 hover:bg-emerald-100/50 bg-emerald-50/50 border border-emerald-150/50 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5 transition-all cursor-pointer"
+                                  >
+                                    <Camera className="w-2.5 h-2.5" /> Kamera
+                                  </button>
+                                )}
+                                {formImage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormImage('')}
+                                    className="text-[9px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" /> Hapus
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          )}
-                          <div className="space-y-0.5 pointer-events-none">
-                            <span className="text-xs font-bold text-slate-900 block">
-                              {compressing ? 'Menyusutkan & Memproses Gambar...' : 'Unggah foto nota, atau seret file ke sini'}
-                            </span>
-                            <span className="text-[10px] text-slate-400 block font-medium">
-                              File Gambar PNG, JPG, JPEG (Maksimal 5MB)
-                            </span>
+
+                            {formImage ? (
+                              <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-white h-24 flex items-center justify-center group shadow-3xs">
+                                <img 
+                                  src={formImage} 
+                                  alt="Preview Bukti 1" 
+                                  className="h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setLightboxImage(formImage)}
+                                    className="px-2 py-1 bg-white font-bold text-slate-900 rounded-md text-[9px] hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                                  >
+                                    Tinjau
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  setIsDragging(true);
+                                }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setIsDragging(false);
+                                  const file = e.dataTransfer.files?.[0];
+                                  if (file) handleImageFile(file, 1);
+                                }}
+                                onClick={() => document.getElementById('evidence-file-input-1')?.click()}
+                                className="border-2 border-dashed border-slate-200 bg-white hover:bg-slate-50/50 rounded-xl p-4 text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer min-h-[96px]"
+                              >
+                                <input 
+                                  type="file" 
+                                  id="evidence-file-input-1"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleImageFile(file, 1);
+                                  }}
+                                  className="hidden"
+                                />
+                                {compressing && cameraSlot === 1 ? (
+                                  <Loader2 className="w-4 h-4 text-slate-500 animate-spin" />
+                                ) : (
+                                  <Plus className="w-3.5 h-3.5 text-slate-400" />
+                                )}
+                                <span className="text-[10px] font-bold text-slate-600">Pilih / Seret Gambar</span>
+                                <span className="text-[8.5px] text-slate-400">PNG, JPG, JPEG</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Slot 2: Gambar Tambahan */}
+                          <div className="border border-slate-200/85 rounded-2xl p-3 bg-slate-50/55 space-y-2.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide font-sans">Gambar 2 (Tambahan)</span>
+                              <div className="flex items-center gap-1.5">
+                                {!formImage2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCameraSlot(2);
+                                      startCamera(activeFacingMode);
+                                    }}
+                                    className="text-[9px] text-emerald-700 hover:bg-emerald-100/50 bg-emerald-50/50 border border-emerald-150/50 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5 transition-all cursor-pointer"
+                                  >
+                                    <Camera className="w-2.5 h-2.5" /> Kamera
+                                  </button>
+                                )}
+                                {formImage2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFormImage2('')}
+                                    className="text-[9px] text-rose-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" /> Hapus
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {formImage2 ? (
+                              <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-white h-24 flex items-center justify-center group shadow-3xs">
+                                <img 
+                                  src={formImage2} 
+                                  alt="Preview Bukti 2" 
+                                  className="h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setLightboxImage(formImage2)}
+                                    className="px-2 py-1 bg-white font-bold text-slate-900 rounded-md text-[9px] hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                                  >
+                                    Tinjau
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  setIsDragging(true);
+                                }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setIsDragging(false);
+                                  const file = e.dataTransfer.files?.[0];
+                                  if (file) handleImageFile(file, 2);
+                                }}
+                                onClick={() => document.getElementById('evidence-file-input-2')?.click()}
+                                className="border-2 border-dashed border-slate-200 bg-white hover:bg-slate-50/50 rounded-xl p-4 text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer min-h-[96px]"
+                              >
+                                <input 
+                                  type="file" 
+                                  id="evidence-file-input-2"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleImageFile(file, 2);
+                                  }}
+                                  className="hidden"
+                                />
+                                {compressing && cameraSlot === 2 ? (
+                                  <Loader2 className="w-4 h-4 text-slate-500 animate-spin" />
+                                ) : (
+                                  <Plus className="w-3.5 h-3.5 text-slate-400" />
+                                )}
+                                <span className="text-[10px] font-bold text-slate-600">Pilih / Seret Gambar</span>
+                                <span className="text-[8.5px] text-slate-400">PNG, JPG, JPEG</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
 
-                      {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && !formImage && (
+                      {(formType === 'Inflow' ? systemSettings.imageRequiredIn : systemSettings.imageRequiredOut) && !formImage && !formImage2 && (
                         <p className="text-[10px] text-rose-600 flex items-center gap-1 font-semibold">
                           <AlertTriangle className="w-3.5 h-3.5" />
-                          Unggah foto bukti nota wajib untuk jenis transaksi ini.
+                          Unggah minimal salah satu foto bukti nota wajib untuk jenis transaksi ini.
                         </p>
                       )}
-                    </div>
+                    </div>          </div>
 
                   </div>
 

@@ -363,16 +363,26 @@ export default function ReconciliationView({
 
                       {/* EVIDENCE IMAGE */}
                       <td className="py-4 px-4 text-center">
-                        <div className="flex items-center justify-center">
-                          {tx.image ? (
+                        <div className="flex items-center justify-center gap-1.5">
+                          {tx.image && (
                             <button
                               onClick={() => setSelectedImage(tx.image || null)}
                               className="p-1.5 bg-slate-50 border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 rounded-lg transition-all"
-                              title="Tampilkan Berkas Bukti"
+                              title="Tampilkan Berkas Bukti 1"
                             >
                               <Image className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
+                          )}
+                          {tx.image2 && (
+                            <button
+                              onClick={() => setSelectedImage(tx.image2 || null)}
+                              className="p-1.5 bg-slate-50 border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 rounded-lg transition-all"
+                              title="Tampilkan Berkas Bukti 2"
+                            >
+                              <Image className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!tx.image && !tx.image2 && (
                             <span className="text-slate-300 text-[10px] font-normal italic">-</span>
                           )}
                         </div>
