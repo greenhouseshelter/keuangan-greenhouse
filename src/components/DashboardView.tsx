@@ -564,12 +564,7 @@ export default function DashboardView({
               Dari {inflows.length} transaksi pencatatan
             </div>
           </div>
-        ) : (
-          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
-            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
-            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Arus Masuk Dinonaktifkan</span>
-          </div>
-        )}
+        ) : null}
 
         {/* TOTAL OUTFLOW */}
         {dashboardConfig.showTotalOutflow ? (
@@ -595,12 +590,7 @@ export default function DashboardView({
               Terbagi dalam {outflows.length} transaksi pembelanjaan
             </div>
           </div>
-        ) : (
-          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
-            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
-            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Arus Keluar Dinonaktifkan</span>
-          </div>
-        )}
+        ) : null}
 
         {/* NET PROFIT */}
         {dashboardConfig.showNetProfit ? (
@@ -627,12 +617,7 @@ export default function DashboardView({
               Selisih arus pendapatan dan biaya
             </div>
           </div>
-        ) : (
-          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
-            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
-            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Laba Bersih Dinonaktifkan</span>
-          </div>
-        )}
+        ) : null}
 
         {/* NET PROFIT MARGIN */}
         {dashboardConfig.showNetProfitMargin ? (
@@ -655,12 +640,7 @@ export default function DashboardView({
               Rasio laba dibanding total uang masuk
             </div>
           </div>
-        ) : (
-          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
-            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
-            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Margin Laba Dinonaktifkan</span>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* Pie Charts Breakdown Section */}
@@ -759,12 +739,7 @@ export default function DashboardView({
                 })}
               </div>
             </div>
-          ) : (
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 border-dashed lg:col-span-2 flex flex-col justify-center items-center text-center py-20 opacity-60">
-              <EyeOff className="w-6 h-6 text-slate-300 mb-1" />
-              <span className="text-xs text-slate-400 font-semibold uppercase font-mono">Komparasi Proyek Dinonaktifkan</span>
-            </div>
-          )}
+          ) : null}
 
           {/* Operational Split & Distribution */}
           {dashboardConfig.showOpsSplit ? (
@@ -835,12 +810,7 @@ export default function DashboardView({
                 *Pengelola hanya diperbolehkan menginput transaksi operasional kebun directly.
               </div>
             </div>
-          ) : (
-            <div className="bg-white p-6 rounded-2xl border border-slate-205 border-dashed flex flex-col justify-center items-center text-center py-20 opacity-60">
-              <EyeOff className="w-6 h-6 text-slate-300 mb-1" />
-              <span className="text-xs text-slate-400 font-semibold uppercase font-mono">Sektor Biaya Dinonaktifkan</span>
-            </div>
-          )}
+          ) : null}
         </div>
       )}
 
