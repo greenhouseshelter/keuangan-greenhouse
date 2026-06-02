@@ -894,7 +894,7 @@ export default function App() {
         {/* Spacer Desktop Sidebar to keep layout stable while minimized are active */}
         <div 
           className={`hidden md:block shrink-0 transition-all duration-300 no-print ${
-            sidebarPinned ? 'w-64' : 'w-16'
+            sidebarPinned ? 'w-0' : 'w-16'
           }`}
         />
 
