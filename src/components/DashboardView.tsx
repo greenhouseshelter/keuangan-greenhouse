@@ -28,7 +28,7 @@ export function getProjectHexColor(name: string): string {
     norm.includes('green') ||
     norm.includes('house')
   ) {
-    return '#06b6d4'; // Teal/Cyan for Greenhouse variations
+    return '#ef4444'; // Chili Red for Greenhouse variations
   }
   return '#ec4899'; // Pink/Magenta for any other dynamic project
 }
@@ -46,7 +46,7 @@ export function getProjectBadgeClass(name: string): string {
     norm.includes('green') ||
     norm.includes('house')
   ) {
-    return 'bg-cyan-50 text-cyan-700 border border-cyan-100';
+    return 'bg-red-50 text-red-700 border border-red-100';
   }
   return 'bg-pink-50 text-pink-700 border border-pink-100';
 }
@@ -69,10 +69,11 @@ function ProjectPieChart({
   type: 'Inflow' | 'Outflow';
 }) {
   const activeData = data.filter(d => d.amount > 0);
+  const [hoveredName, setHoveredName] = useState<string | null>(null);
   
   if (totalAmount === 0 || activeData.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 h-44">
+      <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 h-52">
         <span className="text-xs text-slate-400 font-semibold tracking-wide">
           Tidak ada data {type === 'Inflow' ? 'pemasukan' : 'pengeluaran'}
         </span>
@@ -81,15 +82,31 @@ function ProjectPieChart({
   }
 
   const radius = 35;
-  const strokeWidth = 12;
+  const strokeWidth = 10;
   const circumference = 2 * Math.PI * radius; // Approx 219.91
   
-  let cumulativePercent = 0;
+  // Pre-calculate segments cleanly without render-time side effects
+  let runningPercent = 0;
+  const segments = activeData.map((slice) => {
+    const percent = slice.amount / totalAmount;
+    const strokeLength = percent * circumference;
+    const strokeOffset = circumference - (runningPercent * circumference);
+    runningPercent += percent;
+    return {
+      ...slice,
+      percent,
+      strokeLength,
+      strokeOffset,
+    };
+  });
+
+  const activeHoveredSlice = hoveredName ? activeData.find(d => d.name === hoveredName) : null;
+  const activeHoveredPercent = activeHoveredSlice ? (activeHoveredSlice.amount / totalAmount) * 100 : 0;
 
   return (
-    <div className="bg-slate-50/40 p-4 rounded-2xl border border-slate-100 flex flex-col sm:flex-row items-center gap-6 justify-center w-full">
-      {/* SVG Donut */}
-      <div className="relative w-28 h-28 flex-shrink-0">
+    <div className="bg-slate-50/30 hover:bg-slate-50/70 p-5 rounded-2xl border border-slate-150 transition-all duration-300 flex flex-col md:flex-row items-center gap-6 justify-center w-full shadow-xs">
+      {/* SVG Donut Container with Hover Dynamics */}
+      <div className="relative w-32 h-32 flex-shrink-0 select-none">
         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
           <circle
             cx="50"
@@ -99,12 +116,9 @@ function ProjectPieChart({
             stroke="#f1f5f9"
             strokeWidth={strokeWidth}
           />
-          {activeData.map((slice) => {
-            const percent = slice.amount / totalAmount;
-            const strokeLength = percent * circumference;
-            const strokeOffset = circumference - (cumulativePercent * circumference);
-            cumulativePercent += percent;
-            
+          {segments.map((slice) => {
+            const isHovered = hoveredName === slice.name;
+            const isAnyHovered = hoveredName !== null;
             return (
               <circle
                 key={slice.name}
@@ -113,43 +127,111 @@ function ProjectPieChart({
                 r={radius}
                 fill="transparent"
                 stroke={slice.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${strokeLength} ${circumference}`}
-                strokeDashoffset={strokeOffset}
+                strokeWidth={isHovered ? strokeWidth + 3.5 : strokeWidth}
+                strokeDasharray={`${slice.strokeLength} ${circumference}`}
+                strokeDashoffset={slice.strokeOffset}
                 strokeLinecap={activeData.length > 1 ? 'butt' : 'round'}
-                className="transition-all duration-300 hover:scale-[1.03] origin-center cursor-pointer"
-                style={{ transformOrigin: '50% 50%' }}
+                onMouseEnter={() => setHoveredName(slice.name)}
+                onMouseLeave={() => setHoveredName(null)}
+                className="cursor-pointer transition-all duration-300 origin-center"
+                style={{ 
+                  transformOrigin: '50% 50%',
+                  transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                  opacity: isAnyHovered ? (isHovered ? 1 : 0.45) : 1,
+                  filter: isHovered ? 'drop-shadow(0px 0px 4px rgba(0,0,0,0.15))' : 'none'
+                }}
               />
             );
           })}
         </svg>
-        {/* Center Text */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Total</span>
-          <span className="text-[10px] font-extrabold text-slate-700 font-mono mt-0.5" title={`Rp ${totalAmount.toLocaleString('id-ID')}`}>
-            {totalAmount >= 1000000 
-              ? `Rp ${(totalAmount / 1000000).toFixed(1)}M` 
-              : `Rp ${(totalAmount / 1000).toFixed(0)}K`}
-          </span>
+        
+        {/* Absolute Centered Legend Text - Dynamic based on hovering */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-2 pointer-events-none">
+          {activeHoveredSlice ? (
+            <div className="animate-fade-in flex flex-col items-center justify-center">
+              <span 
+                className="text-[8px] font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded-full mb-0.5 inline-block text-white" 
+                style={{ backgroundColor: activeHoveredSlice.color }}
+              >
+                {activeHoveredSlice.name.substring(0, 10)}
+              </span>
+              <span className="text-[11px] font-extrabold text-slate-800 font-mono">
+                {activeHoveredPercent.toFixed(1)}%
+              </span>
+              <span className="text-[9px] text-slate-400 font-bold font-mono">
+                {activeHoveredSlice.amount >= 1000000 
+                  ? `Rp ${(activeHoveredSlice.amount / 1000000).toFixed(1)}Jt` 
+                  : `Rp ${(activeHoveredSlice.amount / 1000).toFixed(0)}rb`}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center">
+              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest leading-none">TOTAL</span>
+              <span className="text-xs font-black text-slate-700 font-mono mt-1" title={`Rp ${totalAmount.toLocaleString('id-ID')}`}>
+                {totalAmount >= 1000000 
+                  ? `Rp ${(totalAmount / 1000000).toFixed(1)}Jt` 
+                  : `Rp ${(totalAmount / 1000).toFixed(0)}rb`}
+              </span>
+              <span className="text-[7.5px] text-slate-400 font-semibold uppercase mt-0.5 tracking-wider">
+                {type === 'Inflow' ? 'In-Flow' : 'Out-Flow'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Legend / Stats */}
-      <div className="flex-1 space-y-1.5 w-full">
-        <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">{title}</p>
-        <div className="space-y-1">
+      {/* Legend / Stats with Compact Interactive Cards */}
+      <div className="flex-1 space-y-2.5 w-full">
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1.5">
+          {title}
+        </p>
+        <div className="space-y-1.5">
           {data.map((item) => {
-            const percentage = totalAmount > 0 ? (item.amount / totalAmount) * 105 : 0; // approximate visually normalized percentages
-            const realPercentage = totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0;
+            const isHovered = hoveredName === item.name;
+            const isAnyHovered = hoveredName !== null;
+            const percentage = totalAmount > 0 ? (item.amount / totalAmount) * 100 : 0;
             return (
-              <div key={item.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                  <span className="text-slate-600 font-semibold truncate text-[10.5px]">{item.name}</span>
+              <div 
+                key={item.name} 
+                onMouseEnter={() => setHoveredName(item.name)}
+                onMouseLeave={() => setHoveredName(null)}
+                className={`group px-2 py-1.5 rounded-xl border transition-all duration-300 cursor-pointer ${
+                  isHovered 
+                    ? 'bg-slate-50 border-slate-200/80 shadow-xs scale-[1.01]' 
+                    : 'bg-transparent border-transparent'
+                }`}
+                style={{
+                  opacity: isAnyHovered ? (isHovered ? 1 : 0.5) : 1
+                }}
+              >
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span 
+                      className="w-2 h-2 rounded-full shrink-0 shadow-xs group-hover:scale-110 transition-transform" 
+                      style={{ backgroundColor: item.color }} 
+                    />
+                    <span className="text-slate-600 font-bold truncate text-[11px] group-hover:text-slate-900 transition-colors">
+                      {item.name}
+                    </span>
+                  </div>
+                  <div className="text-right font-mono flex items-center gap-1.5">
+                    <span className="text-slate-400 text-[10px] font-medium">({percentage.toFixed(0)}%)</span>
+                    <span className="font-bold text-slate-700 text-[11px] group-hover:text-slate-900 transition-colors">
+                      Rp {item.amount.toLocaleString('id-ID')}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right font-mono flex items-center gap-1.5">
-                  <span className="text-slate-400 text-[9px]">({realPercentage.toFixed(0)}%)</span>
-                  <span className="font-bold text-slate-700 text-[10.5px]">Rp {item.amount.toLocaleString('id-ID')}</span>
+
+                {/* Micro Gauge Line */}
+                <div className="w-full h-1 bg-slate-100/80 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full rounded-full transition-all duration-500 ease-out" 
+                    style={{ 
+                      width: `${percentage}%`, 
+                      backgroundColor: item.color,
+                      opacity: isHovered ? 1 : 0.65
+                    }}
+                  />
                 </div>
               </div>
             );
