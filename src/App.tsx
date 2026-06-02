@@ -1247,8 +1247,9 @@ export default function App() {
 
         {/* Dynamic Soft Bento Compact Navigation Sidebar (Konsol Sederhana) */}
         {layoutTemplate === 'compact' && (
-          <aside className="bg-slate-50/90 dark:bg-slate-900/90 border-r border-slate-200/80 dark:border-slate-800/80 hidden md:flex flex-col justify-between shrink-0 no-print sticky top-[61.5px] h-[calc(100vh-61.5px)] w-[235px] select-none p-4 overflow-y-auto scrollbar-thin">
-            <div className="space-y-4">
+          <aside className="bg-slate-50/90 dark:bg-slate-900/90 border-r border-slate-200/80 dark:border-slate-800/80 hidden md:flex flex-col shrink-0 no-print sticky top-[61.5px] h-[calc(100vh-61.5px)] w-[235px] select-none p-4 overflow-hidden">
+            {/* Scrollable menu part with dedicated inner container */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin pr-1 space-y-4">
               {/* Heading resembling modern SaaS dashboard */}
               <div className="pb-3 border-b border-slate-200/60 dark:border-slate-800/60">
                 <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold tracking-widest uppercase block mb-1 font-mono">
@@ -1262,8 +1263,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Elegant Bento Grid (2 Columns of Rounded Cards) - No hidden scrollbar, natural scroll when viewport is small */}
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              {/* Elegant Bento List (1 Column of Rounded Rectangular Cards) */}
+              <div className="flex flex-col gap-2 pt-1">
                 {navItems.map(item => {
                   const Icon = item.icon;
                   const isActive = activeTab === item.id;
@@ -1277,28 +1278,32 @@ export default function App() {
                           setTxInitialFilters(undefined);
                         }
                       }}
-                      className={`aspect-square shrink-0 flex flex-col justify-between p-3.5 rounded-2xl border transition-all duration-200 relative select-none text-left cursor-pointer group transform hover:-translate-y-0.5 hover:shadow-sm active:scale-95 ${
+                      className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 relative select-none text-left cursor-pointer group transform hover:-translate-y-0.5 hover:shadow-xs active:scale-95 ${
                         isActive 
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 shadow-xs' 
-                          : 'bg-white text-slate-650 border-slate-200/70 hover:bg-emerald-50/55 hover:text-emerald-700 hover:border-emerald-250/70 dark:bg-slate-950/20 dark:text-slate-400 dark:border-slate-800/50 dark:hover:bg-slate-900/40 dark:hover:text-slate-200 dark:hover:border-slate-800'
+                          : 'bg-white text-slate-600 border-slate-200/70 hover:bg-emerald-50/55 hover:text-emerald-700 hover:border-emerald-250/70 dark:bg-slate-950/20 dark:text-slate-400 dark:border-slate-800/50 dark:hover:bg-slate-900/40 dark:hover:text-slate-200 dark:hover:border-slate-800'
                       }`}
                     >
-                      <div className="flex items-start justify-between w-full">
-                        <div className={`p-2 rounded-xl transition-colors ${
-                          isActive 
-                            ? 'bg-emerald-200/60 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300' 
-                            : 'bg-slate-100 dark:bg-slate-900 text-slate-505 dark:text-slate-400 group-hover:bg-emerald-100/50 group-hover:text-emerald-700'
-                        }`}>
-                          <Icon className="w-4 h-4 shrink-0" />
-                        </div>
-                        {isActive && (
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping mt-1 mr-0.5" />
-                        )}
+                      <div className={`p-2 rounded-xl transition-colors shrink-0 ${
+                        isActive 
+                          ? 'bg-emerald-200/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' 
+                          : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-450 group-hover:bg-emerald-100/50 group-hover:text-emerald-700'
+                      }`}>
+                        <Icon className="w-4 h-4 shrink-0" />
                       </div>
 
-                      <span className="text-[10px] font-bold tracking-tight leading-tight uppercase font-sans mt-2 block break-words">
-                        {item.name}
-                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[11px] font-bold tracking-tight leading-snug uppercase font-sans block break-words whitespace-normal">
+                          {item.name}
+                        </span>
+                      </div>
+
+                      {isActive && (
+                        <div className="relative flex h-2 w-2 mr-1 shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -1306,7 +1311,7 @@ export default function App() {
             </div>
 
             {/* Logout Soft Rounded Button */}
-            <div className="border-t border-slate-200/60 dark:border-slate-800/60 pt-3.5 mt-4">
+            <div className="border-t border-slate-200/60 dark:border-slate-800/60 pt-3.5 mt-4 shrink-0">
               <button 
                 onClick={handleLogout}
                 className="w-full h-11 bg-rose-50 hover:bg-rose-100/80 text-rose-700 border border-rose-200/45 dark:bg-rose-950/15 dark:hover:bg-rose-950/25 dark:text-rose-400 dark:border-rose-900/30 font-bold text-[10.5px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 rounded-2xl hover:shadow-xs active:scale-95 cursor-pointer"
