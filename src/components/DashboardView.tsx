@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Transaction, Project, DatabaseConfig, Role } from '../types';
+import { Transaction, Project, DatabaseConfig, Role, User } from '../types';
 import { getProjects } from '../utils/db';
 import { formatIndonesianDate } from '../utils/date';
 import { isTxApproved } from '../utils/approvalHelper';
+import { addActivityLog } from '../utils/activityLogger';
 import { 
   TrendingUp, TrendingDown, Landmark, Percent, ArrowUpRight, 
-  ArrowDownRight, CircleDollarSign, Calendar, SlidersHorizontal, CheckSquare
+  ArrowDownRight, CircleDollarSign, Calendar, SlidersHorizontal, CheckSquare,
+  Image, Check, Clock, ShieldAlert, Loader2, RefreshCw, Lock, Unlock, Eye, EyeOff, HelpCircle
 } from 'lucide-react';
+import { DashboardRoleConfig } from './DashboardConfigView';
 
 interface DashboardViewProps {
   transactions: Transaction[];
   onNavigateToRecords: (filters?: { project?: Project; type?: 'Inflow' | 'Outflow' }) => void;
   config: DatabaseConfig;
   currentRole?: Role;
+  usersList?: User[];
+  onUpdateTransaction?: (tx: Transaction) => Promise<boolean>;
+  currentUser?: string;
 }
 
 export function getProjectHexColor(name: string): string {
@@ -254,10 +260,96 @@ function ProjectPieChart({
   );
 }
 
-export default function DashboardView({ transactions, onNavigateToRecords, config, currentRole }: DashboardViewProps) {
+const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
+  Admin: {
+    showTotalInflow: true,
+    showTotalOutflow: true,
+    showNetProfit: true,
+    showNetProfitMargin: true,
+    showPieCharts: true,
+    showBarCharts: true,
+    showOpsSplit: true,
+    showRecentActivity: true,
+    showReconciliation: true,
+  },
+  Finance: {
+    showTotalInflow: true,
+    showTotalOutflow: true,
+    showNetProfit: true,
+    showNetProfitMargin: true,
+    showPieCharts: true,
+    showBarCharts: true,
+    showOpsSplit: true,
+    showRecentActivity: true,
+    showReconciliation: true,
+  },
+  Accounting: {
+    showTotalInflow: true,
+    showTotalOutflow: true,
+    showNetProfit: true,
+    showNetProfitMargin: true,
+    showPieCharts: true,
+    showBarCharts: true,
+    showOpsSplit: true,
+    showRecentActivity: true,
+    showReconciliation: false,
+  },
+  Pengelola: {
+    showTotalInflow: true,
+    showTotalOutflow: true,
+    showNetProfit: false,
+    showNetProfitMargin: false,
+    showPieCharts: true,
+    showBarCharts: true,
+    showOpsSplit: false,
+    showRecentActivity: true,
+    showReconciliation: false,
+  }
+};
+
+export default function DashboardView({ 
+  transactions, 
+  onNavigateToRecords, 
+  config, 
+  currentRole,
+  usersList = [],
+  onUpdateTransaction,
+  currentUser = 'System'
+}: DashboardViewProps) {
   const [selectedTimeline, setSelectedTimeline] = useState<'all' | '30days' | '7days'>('all');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<Project | 'All'>('All');
   const [projectsList, setProjectsList] = useState<string[]>([]);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // Load custom dashboard config for the current role
+  const [dashboardConfig, setDashboardConfig] = useState<DashboardRoleConfig>(() => {
+    const saved = localStorage.getItem('greenhouse_dashboard_roles_config');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && currentRole && parsed[currentRole]) {
+          return parsed[currentRole];
+        }
+      } catch (err) {}
+    }
+    return DEFAULT_ROLE_CONFIGS[currentRole || 'Pengelola'] || DEFAULT_ROLE_CONFIGS['Pengelola'];
+  });
+
+  // Re-load configurations if current role changes, or on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('greenhouse_dashboard_roles_config');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && currentRole && parsed[currentRole]) {
+          setDashboardConfig(parsed[currentRole]);
+          return;
+        }
+      } catch (err) {}
+    }
+    setDashboardConfig(DEFAULT_ROLE_CONFIGS[currentRole || 'Pengelola'] || DEFAULT_ROLE_CONFIGS['Pengelola']);
+  }, [currentRole]);
 
   useEffect(() => {
     const loadProjs = async () => {
@@ -271,6 +363,71 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
     loadProjs();
   }, []);
 
+  // Helper to check if transaction is from Pengelola
+  const isFromPengelola = (tx: Transaction) => {
+    const recLower = (tx.recordedBy || '').toLowerCase();
+    if (recLower === 'pengelola') return true;
+    const matchUser = usersList.find(u => u.username.toLowerCase() === recLower);
+    return matchUser?.role === 'Pengelola';
+  };
+
+  // List of all inflows submitted by a Pengelola role but still Pending approval
+  const pendingReconciliationInflows = transactions.filter(
+    t => t.type === 'Inflow' && !isTxApproved(t) && isFromPengelola(t)
+  );
+
+  // Handler for quick-approving reconciliation item directly on the dashboard
+  const handleQuickApprove = async (tx: Transaction) => {
+    if (currentRole !== 'Finance' && currentRole !== 'Admin') {
+      alert('Hanya role Finance dan Admin yang berwenang melakukan rekonsiliasi data.');
+      return;
+    }
+
+    setUpdatingId(tx.id);
+
+    const newEntry = {
+      editedAt: new Date().toISOString(),
+      editedBy: `${currentUser} (${currentRole})`,
+      changes: `Persetujuan: dari "BELUM DISETUJUI" menjadi "DISETUJUI" (Rekonsiliasi Cepat via Dashboard)`
+    };
+
+    let prevHistory = [];
+    if (tx.editHistory) {
+      try {
+        prevHistory = JSON.parse(tx.editHistory);
+        if (!Array.isArray(prevHistory)) prevHistory = [];
+      } catch (e) {
+        prevHistory = [];
+      }
+    }
+    const updatedHistory = [newEntry, ...prevHistory];
+    const updatedHistoryString = JSON.stringify(updatedHistory);
+
+    const updatedTx: Transaction = {
+      ...tx,
+      isApproved: true,
+      editHistory: updatedHistoryString
+    };
+
+    try {
+      if (onUpdateTransaction) {
+        const success = await onUpdateTransaction(updatedTx);
+        if (success) {
+          addActivityLog(
+            'REKONSILIASI_SETUJU',
+            `${currentRole} melakukan rekonsiliasi cepat Uang Masuk (Inflow) transaksi ${tx.id} senilai Rp ${tx.amount.toLocaleString('id-ID')} (Proyek ${tx.project}) via Dasbor`
+          );
+        } else {
+          alert('Gagal memperbarui status rekonsiliasi.');
+        }
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message || String(err)}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   // Filter transactions based on timeline selection
   const now = new Date();
   const getFilteredTransactions = () => {
@@ -281,7 +438,7 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
       const limit = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       list = list.filter(t => new Date(t.date) >= limit);
     } else if (selectedTimeline === '7days') {
-      const limit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const limit = new Date(now.getTime() - 7 * 24 * 60 * 65 * 1000);
       list = list.filter(t => new Date(t.date) >= limit);
     }
 
@@ -381,327 +538,515 @@ export default function DashboardView({ transactions, onNavigateToRecords, confi
       </div>
 
       {/* Financial Bento Matrix Card Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-sans">
         
         {/* TOTAL INFLOW */}
-        <div 
-          onClick={() => onNavigateToRecords({ type: 'Inflow' })}
-          className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs cursor-pointer hover:border-emerald-300 hover:shadow-xs transition-all duration-300"
-        >
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md flex items-center gap-1">
-              <ArrowUpRight className="w-3" /> INFLOW
-            </span>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs text-slate-500 font-medium">Uang Masuk / Pendapatan</p>
-            <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
-              Rp {totalInflow.toLocaleString('id-ID')}
-            </h3>
-          </div>
-          <div className="mt-3 text-[10px] text-slate-400">
-            Dari {inflows.length} transaksi pencatatan
-          </div>
-        </div>
-
-        {/* TOTAL OUTFLOW */}
-        <div 
-          onClick={() => onNavigateToRecords({ type: 'Outflow' })}
-          className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs cursor-pointer hover:border-rose-300 hover:shadow-xs transition-all duration-300"
-        >
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
-              <TrendingDown className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md flex items-center gap-1">
-              <ArrowDownRight className="w-3" /> OUTFLOW
-            </span>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs text-slate-500 font-medium">Uang Keluar / Pengeluaran</p>
-            <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
-              Rp {totalOutflow.toLocaleString('id-ID')}
-            </h3>
-          </div>
-          <div className="mt-3 text-[10px] text-slate-400">
-            Terbagi dalam {outflows.length} transaksi pembelanjaan
-          </div>
-        </div>
-
-        {/* NET PROFIT */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex justify-between items-start">
-            <div className={`p-3 rounded-xl ${netProfit >= 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
-              <Landmark className="w-5 h-5" />
-            </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-              netProfit >= 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
-            }`}>
-              {netProfit >= 0 ? 'SURPLUS' : 'DEFISIT'}
-            </span>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs text-slate-500 font-medium font-display">Laba Bersih (Net Profit)</p>
-            <h3 className={`text-xl lg:text-2xl font-display font-extrabold mt-1 font-mono ${
-              netProfit >= 0 ? 'text-slate-800' : 'text-rose-600'
-            }`}>
-              Rp {netProfit.toLocaleString('id-ID')}
-            </h3>
-          </div>
-          <div className="mt-3 text-[10px] text-slate-400">
-            Selisih arus pendapatan dan biaya
-          </div>
-        </div>
-
-        {/* NET PROFIT MARGIN */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex justify-between items-start">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-              <Percent className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
-              RENTABILITAS
-            </span>
-          </div>
-          <div className="mt-4">
-            <p className="text-xs text-slate-500 font-medium">Margin Keuntungan</p>
-            <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
-              {netProfitMargin.toFixed(1)}%
-            </h3>
-          </div>
-          <div className="mt-3 text-[10px] text-slate-400">
-            Rasio laba dibanding total uang masuk
-          </div>
-        </div>
-      </div>
-
-      {/* Pie Charts Breakdown Section */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
-        <div>
-          <h3 className="font-display font-bold text-slate-800 text-[15px]">Proporsi Alokasi Dana per Proyek</h3>
-          <p className="text-xs text-slate-500">Persentase kontribusi proyek terhadap total Pemasukan (In-Flow) dan Pengeluaran (Out-Flow).</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ProjectPieChart 
-            title="Porsi Kontribusi Pemasukan (In-Flow)" 
-            data={projectStats.map(p => ({
-              name: p.name,
-              amount: p.inflow,
-              color: getProjectHexColor(p.name)
-            }))}
-            totalAmount={totalInflow}
-            type="Inflow"
-          />
-          <ProjectPieChart 
-            title="Porsi Distribusi Pengeluaran (Out-Flow)" 
-            data={projectStats.map(p => ({
-              name: p.name,
-              amount: p.outflow,
-              color: getProjectHexColor(p.name)
-            }))}
-            totalAmount={totalOutflow}
-            type="Outflow"
-          />
-        </div>
-      </div>
-
-      {/* Visual Analytics Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Project Comparison Chart (SVG Native) */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2 space-y-4">
-          <div>
-            <h3 className="font-display font-bold text-slate-800">Arus Pendapatan & Pengeluaran</h3>
-            <p className="text-xs text-slate-500">Perbandingan pemasukan vs pengeluaran langsung antar semua unit proyek greenhouse.</p>
-          </div>
-
-          <div className="pt-4 space-y-6">
-            {projectStats.map(p => {
-              const inPct = (p.inflow / maxProjectCashInput) * 100;
-              const outPct = (p.outflow / maxProjectCashInput) * 100;
-              const netIsPositive = p.net >= 0;
-
-              return (
-                <div key={p.name} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getProjectHexColor(p.name) }}></span>
-                      <span className="text-xs font-semibold text-slate-700 font-display">Proyek {p.name}</span>
-                      <span className="text-[10px] text-slate-400">({p.count} tx)</span>
-                    </div>
-                    <span className={`text-[10px] font-bold ${netIsPositive ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      Laba Bersih: Rp {p.net.toLocaleString('id-ID')}
-                    </span>
-                  </div>
-
-                  {/* Horizontal Bar Chart representation */}
-                  <div className="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    {/* Inflow bar */}
-                    <div className="space-y-0.5">
-                      <div className="flex justify-between text-[9px] text-slate-500 font-mono">
-                        <span>Pemasukan: Rp {p.inflow.toLocaleString('id-ID')}</span>
-                      </div>
-                      <div className="w-full h-2.5 bg-slate-200/50 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                          style={{ width: `${Math.max(inPct, 1.5)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    {/* Outflow bar */}
-                    <div className="space-y-0.5">
-                      <div className="flex justify-between text-[9px] text-slate-500 font-mono">
-                        <span>Pengeluaran: Rp {p.outflow.toLocaleString('id-ID')}</span>
-                      </div>
-                      <div className="w-full h-2.5 bg-slate-200/50 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-rose-500 rounded-full transition-all duration-500"
-                          style={{ width: `${Math.max(outPct, 1.5)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Operational Split & Distribution */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6 flex flex-col justify-between">
-          <div>
-            <h3 className="font-display font-bold text-slate-800">Sektor Biaya Operasional</h3>
-            <p className="text-xs text-slate-500">Breakdown pembelanjaan operasional langsung di kebun vs non-operasional.</p>
-          </div>
-
-          {/* Graphical donut comparison representation using custom styled metrics */}
-          <div className="py-2 space-y-4 flex-1 flex flex-col justify-center">
-            {/* Operational distribution info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Operasional Kebun</span>
-                <div className="mt-2">
-                  <span className="text-xs block text-slate-400">Total Biaya:</span>
-                  <span className="text-sm font-bold font-mono text-slate-800 block">Rp {opsOutflow.toLocaleString('id-ID')}</span>
-                </div>
-                {/* Ratio percent */}
-                <div className="mt-2 text-[10px] text-slate-500 font-medium">
-                  {totalOutflow > 0 ? ((opsOutflow / totalOutflow) * 100).toFixed(0) : 0}% Pengeluaran
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Non-Operasional</span>
-                <div className="mt-2">
-                  <span className="text-xs block text-slate-400">Total Biaya:</span>
-                  <span className="text-sm font-bold font-mono text-slate-800 block">Rp {nonOpsOutflow.toLocaleString('id-ID')}</span>
-                </div>
-                {/* Ratio percent */}
-                <div className="mt-2 text-[10px] text-slate-500 font-medium">
-                  {totalOutflow > 0 ? ((nonOpsOutflow / totalOutflow) * 100).toFixed(0) : 0}% Pengeluaran
-                </div>
-              </div>
-            </div>
-
-            {/* Inflow Category split */}
-            <div className="space-y-2 mt-2">
-              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Distribusi Pendapatan</h4>
-              <div className="w-full h-3.5 bg-slate-100 rounded-full flex overflow-hidden">
-                <div 
-                  className="bg-emerald-500 h-full transition-all duration-500" 
-                  style={{ width: `${totalInflow > 0 ? (opsInflow / totalInflow) * 100 : 50}%` }}
-                  title="Operasional"
-                ></div>
-                <div 
-                  className="bg-amber-400 h-full transition-all duration-500" 
-                  style={{ width: `${totalInflow > 0 ? (nonOpsInflow / totalInflow) * 100 : 50}%` }}
-                  title="Non-Operasional"
-                ></div>
-              </div>
-              <div className="flex justify-between text-[10px] text-slate-500">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 block"></span>
-                  Op: Rp {opsInflow.toLocaleString('id-ID')}
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 block"></span>
-                  Non-Op: Rp {nonOpsInflow.toLocaleString('id-ID')}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-100 pt-4 text-[10px] text-slate-400 italic">
-            *Pengelola hanya diperbolehkan menginput transaksi operasional kebun directly.
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Table Preview */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="font-display font-bold text-slate-800">Pencatatan Transaksi Terkini</h3>
-            <p className="text-xs text-slate-500">Daftar 5 pencatatan transaksi keuangan greenhouse terbaru.</p>
-          </div>
-          <button 
-            onClick={() => onNavigateToRecords()} 
-            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+        {dashboardConfig.showTotalInflow ? (
+          <div 
+            onClick={() => onNavigateToRecords({ type: 'Inflow' })}
+            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs cursor-pointer hover:border-emerald-300 hover:shadow-xs transition-all duration-300 animate-fade-in"
           >
-            Lihat Semua Transaksi
-            <ArrowUpRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {recentTxs.length === 0 ? (
-          <div className="text-center py-10 bg-slate-50 rounded-xl text-xs text-slate-400 font-medium">
-            Belum ada transaksi terdaftar yang sesuai dengan filter.
+            <div className="flex justify-between items-start col-span-1">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <ArrowUpRight className="w-3" /> INFLOW
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs text-slate-500 font-medium">Uang Masuk / Pendapatan</p>
+              <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
+                Rp {totalInflow.toLocaleString('id-ID')}
+              </h3>
+            </div>
+            <div className="mt-3 text-[10px] text-slate-400">
+              Dari {inflows.length} transaksi pencatatan
+            </div>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-100">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Tanggal</th>
-                  <th className="py-3 px-4">Proyek</th>
-                  <th className="py-3 px-4">Kategori</th>
-                  <th className="py-3 px-4 text-right">Uang Masuk</th>
-                  <th className="py-3 px-4 text-right">Uang Keluar</th>
-                  <th className="py-3 px-4">Keterangan</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
-                {recentTxs.map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{formatIndonesianDate(t.date)}</td>
-                    <td className="py-3.5 px-4">
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold ${getProjectBadgeClass(t.project)}`}>
-                        {t.project}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="text-[10px] font-medium text-slate-500">{t.category}</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
-                      {t.type === 'Inflow' ? `+ Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono font-bold text-rose-600">
-                      {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 max-w-xs break-words whitespace-normal" title={t.description}>
-                      <span>{t.description}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
+            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
+            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Arus Masuk Dinonaktifkan</span>
+          </div>
+        )}
+
+        {/* TOTAL OUTFLOW */}
+        {dashboardConfig.showTotalOutflow ? (
+          <div 
+            onClick={() => onNavigateToRecords({ type: 'Outflow' })}
+            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs cursor-pointer hover:border-rose-300 hover:shadow-xs transition-all duration-300 animate-fade-in"
+          >
+            <div className="flex justify-between items-start col-span-1">
+              <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
+                <TrendingDown className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <ArrowDownRight className="w-3" /> OUTFLOW
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs text-slate-500 font-medium">Uang Keluar / Pengeluaran</p>
+              <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
+                Rp {totalOutflow.toLocaleString('id-ID')}
+              </h3>
+            </div>
+            <div className="mt-3 text-[10px] text-slate-400">
+              Terbagi dalam {outflows.length} transaksi pembelanjaan
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
+            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
+            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Arus Keluar Dinonaktifkan</span>
+          </div>
+        )}
+
+        {/* NET PROFIT */}
+        {dashboardConfig.showNetProfit ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs animate-fade-in">
+            <div className="flex justify-between items-start col-span-1">
+              <div className={`p-3 rounded-xl ${netProfit >= 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                <Landmark className="w-5 h-5" />
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                netProfit >= 0 ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'
+              }`}>
+                {netProfit >= 0 ? 'SURPLUS' : 'DEFISIT'}
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs text-slate-500 font-medium font-display">Laba Bersih (Net Profit)</p>
+              <h3 className={`text-xl lg:text-2xl font-display font-extrabold mt-1 font-mono ${
+                netProfit >= 0 ? 'text-slate-800' : 'text-rose-600'
+              }`}>
+                Rp {netProfit.toLocaleString('id-ID')}
+              </h3>
+            </div>
+            <div className="mt-3 text-[10px] text-slate-400">
+              Selisih arus pendapatan dan biaya
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
+            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
+            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Laba Bersih Dinonaktifkan</span>
+          </div>
+        )}
+
+        {/* NET PROFIT MARGIN */}
+        {dashboardConfig.showNetProfitMargin ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs animate-fade-in">
+            <div className="flex justify-between items-start col-span-1">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                <Percent className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
+                RENTABILITAS
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs text-slate-500 font-medium font-display">Margin Keuntungan</p>
+              <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
+                {netProfitMargin.toFixed(1)}%
+              </h3>
+            </div>
+            <div className="mt-3 text-[10px] text-slate-400">
+              Rasio laba dibanding total uang masuk
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-50/50 border border-slate-200/50 border-dashed rounded-2xl p-6 flex flex-col justify-center items-center text-center opacity-60 min-h-[170px]">
+            <EyeOff className="w-5 h-5 text-slate-300 mb-1" />
+            <span className="text-[10px] text-slate-400 font-semibold uppercase font-mono tracking-wider">Margin Laba Dinonaktifkan</span>
           </div>
         )}
       </div>
+
+      {/* Pie Charts Breakdown Section */}
+      {dashboardConfig.showPieCharts && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5 animate-fade-in">
+          <div>
+            <h3 className="font-display font-bold text-slate-800 text-[15px]">Proporsi Alokasi Dana per Proyek</h3>
+            <p className="text-xs text-slate-500">Persentase kontribusi proyek terhadap total Pemasukan (In-Flow) dan Pengeluaran (Out-Flow).</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ProjectPieChart 
+              title="Porsi Kontribusi Pemasukan (In-Flow)" 
+              data={projectStats.map(p => ({
+                name: p.name,
+                amount: p.inflow,
+                color: getProjectHexColor(p.name)
+              }))}
+              totalAmount={totalInflow}
+              type="Inflow"
+            />
+            <ProjectPieChart 
+              title="Porsi Distribusi Pengeluaran (Out-Flow)" 
+              data={projectStats.map(p => ({
+                name: p.name,
+                amount: p.outflow,
+                color: getProjectHexColor(p.name)
+              }))}
+              totalAmount={totalOutflow}
+              type="Outflow"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Visual Analytics Charts Section */}
+      {(dashboardConfig.showBarCharts || dashboardConfig.showOpsSplit) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in font-sans">
+          
+          {/* Project Comparison Chart (SVG Native) */}
+          {dashboardConfig.showBarCharts ? (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2 space-y-4">
+              <div>
+                <h3 className="font-display font-bold text-slate-800 text-[14px]">Arus Pendapatan & Pengeluaran</h3>
+                <p className="text-xs text-slate-500">Perbandingan pemasukan vs pengeluaran langsung antar semua unit proyek.</p>
+              </div>
+
+              <div className="pt-2 space-y-6">
+                {projectStats.map(p => {
+                  const inPct = (p.inflow / maxProjectCashInput) * 100;
+                  const outPct = (p.outflow / maxProjectCashInput) * 100;
+                  const netIsPositive = p.net >= 0;
+
+                  return (
+                    <div key={p.name} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getProjectHexColor(p.name) }}></span>
+                          <span className="text-xs font-semibold text-slate-700 font-display">Proyek {p.name}</span>
+                          <span className="text-[10px] text-slate-405">({p.count} tx)</span>
+                        </div>
+                        <span className={`text-[10px] font-bold ${netIsPositive ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          Laba Bersih: Rp {p.net.toLocaleString('id-ID')}
+                        </span>
+                      </div>
+
+                      {/* Horizontal Bar Chart representation */}
+                      <div className="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        {/* Inflow bar */}
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[9px] text-slate-550 font-mono">
+                            <span>Pemasukan: Rp {p.inflow.toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.max(inPct, 1.5)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Outflow bar */}
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[9px] text-slate-550 font-mono">
+                            <span>Pengeluaran: Rp {p.outflow.toLocaleString('id-ID')}</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-rose-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.max(outPct, 1.5)}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 border-dashed lg:col-span-2 flex flex-col justify-center items-center text-center py-20 opacity-60">
+              <EyeOff className="w-6 h-6 text-slate-300 mb-1" />
+              <span className="text-xs text-slate-400 font-semibold uppercase font-mono">Komparasi Proyek Dinonaktifkan</span>
+            </div>
+          )}
+
+          {/* Operational Split & Distribution */}
+          {dashboardConfig.showOpsSplit ? (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6 flex flex-col justify-between">
+              <div>
+                <h3 className="font-display font-bold text-slate-800 text-[14px]">Sektor Biaya Operasional</h3>
+                <p className="text-xs text-slate-500">Breakdown pembelanjaan operasional kebun vs non-operasional.</p>
+              </div>
+
+              {/* Graphical donut comparison representation using custom styled metrics */}
+              <div className="py-2 space-y-4 flex-1 flex flex-col justify-center">
+                {/* Operational distribution info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Operasional Kebun</span>
+                    <div className="mt-2">
+                      <span className="text-xs block text-slate-400">Total Biaya:</span>
+                      <span className="text-sm font-bold font-mono text-slate-800 block">Rp {opsOutflow.toLocaleString('id-ID')}</span>
+                    </div>
+                    {/* Ratio percent */}
+                    <div className="mt-2 text-[10px] text-slate-500 font-medium">
+                      {totalOutflow > 0 ? ((opsOutflow / totalOutflow) * 100).toFixed(0) : 0}% Pengeluaran
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Non-Operasional</span>
+                    <div className="mt-2">
+                      <span className="text-xs block text-slate-400">Total Biaya:</span>
+                      <span className="text-sm font-bold font-mono text-slate-800 block">Rp {nonOpsOutflow.toLocaleString('id-ID')}</span>
+                    </div>
+                    {/* Ratio percent */}
+                    <div className="mt-2 text-[10px] text-slate-500 font-medium">
+                      {totalOutflow > 0 ? ((nonOpsOutflow / totalOutflow) * 100).toFixed(0) : 0}% Pengeluaran
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inflow Category split */}
+                <div className="space-y-2 mt-2">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Distribusi Pendapatan</h4>
+                  <div className="w-full h-3.5 bg-slate-100 rounded-full flex overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-full transition-all duration-500" 
+                      style={{ width: `${totalInflow > 0 ? (opsInflow / totalInflow) * 100 : 50}%` }}
+                      title="Operasional"
+                    ></div>
+                    <div 
+                      className="bg-amber-400 h-full transition-all duration-500" 
+                      style={{ width: `${totalInflow > 0 ? (nonOpsInflow / totalInflow) * 100 : 50}%` }}
+                      title="Non-Operasional"
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 block"></span>
+                      Op: Rp {opsInflow.toLocaleString('id-ID')}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 block"></span>
+                      Non-Op: Rp {nonOpsInflow.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 text-[10px] text-slate-450 italic">
+                *Pengelola hanya diperbolehkan menginput transaksi operasional kebun directly.
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white p-6 rounded-2xl border border-slate-205 border-dashed flex flex-col justify-center items-center text-center py-20 opacity-60">
+              <EyeOff className="w-6 h-6 text-slate-300 mb-1" />
+              <span className="text-xs text-slate-400 font-semibold uppercase font-mono">Sektor Biaya Dinonaktifkan</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rekonsiliasi Uang Masuk Pending (Table Dashboard) - MANDATED BY USER */}
+      {dashboardConfig.showReconciliation && (
+        <div id="quick-reconciliation-panel" className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 animate-fade-in no-print font-sans">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="w-5 h-5 text-indigo-650" />
+                <h3 className="font-display font-bold text-slate-800 text-[15px]">Rekonsiliasi Uang Masuk Pending</h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Pencatatan kas masuk dari <span className="font-bold text-indigo-605">Pengelola Lapangan</span> yang perlu peninjauan, rekonsiliasi, dan persetujuan.
+              </p>
+            </div>
+            <div className="text-xs bg-amber-50 text-amber-700 px-3 py-1.5 border border-amber-100 rounded-xl font-bold font-mono">
+              {pendingReconciliationInflows.length} Transaksi Pending
+            </div>
+          </div>
+
+          {pendingReconciliationInflows.length === 0 ? (
+            <div className="text-center py-10 bg-emerald-50/20 border border-dashed border-emerald-200 rounded-2xl text-xs text-emerald-800 font-semibold flex flex-col items-center justify-center gap-1.5 p-6 animate-fade-in">
+              <Check className="w-7 h-7 text-emerald-600 stroke-[3] bg-emerald-100 p-1 rounded-full shrink-0" />
+              <span>Semua setoran uang masuk reguler telah sepenuhnya direkonsiliasi. Kerja bagus!</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-405 tracking-wider uppercase">
+                    <th className="py-3 px-4">Tanggal</th>
+                    <th className="py-3 px-4">Proyek</th>
+                    <th className="py-3 px-4">Akun COA</th>
+                    <th className="py-3 px-4 text-right">Nominal</th>
+                    <th className="py-3 px-4">Keterangan</th>
+                    <th className="py-3 px-4">Dicatat Oleh</th>
+                    <th className="py-3 px-4 text-center">Bukti Lampiran</th>
+                    <th className="py-3 px-4 text-center">Aksi Verifikasi</th>
+                  </tr>
+                </thead>
+                <tbody className="text-xs text-slate-650 divide-y divide-slate-100">
+                  {pendingReconciliationInflows.map(t => (
+                    <tr key={t.id} className="hover:bg-slate-50/40 transition-colors bg-white">
+                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500 whitespace-nowrap">{t.date}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold ${getProjectBadgeClass(t.project)}`}>
+                          {t.project}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">{t.account || 'Inflow'}</td>
+                      <td className="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900 whitespace-nowrap">
+                        Rp {t.amount.toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-[150px] truncate" title={t.description}>
+                        {t.description || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">{t.recordedBy}</td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {t.image && (
+                            <button
+                              onClick={() => setLightboxImage(t.image || null)}
+                              className="p-1 px-1.5 bg-slate-50 border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 rounded-lg transition-all cursor-pointer"
+                              title="Tampilkan Bukti Lampiran Pertama"
+                            >
+                              <Image className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {t.image2 && (
+                            <button
+                              onClick={() => setLightboxImage(t.image2 || null)}
+                              className="p-1 px-1.5 bg-slate-50 border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100 rounded-lg transition-all cursor-pointer"
+                              title="Tampilkan Bukti Lampiran Kedua"
+                            >
+                              <Image className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!t.image && !t.image2 && <span className="text-slate-350 italic text-[11px]">-</span>}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        {currentRole === 'Admin' || currentRole === 'Finance' ? (
+                          <button
+                            onClick={() => handleQuickApprove(t)}
+                            disabled={updatingId === t.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-[10.5px] font-bold transition-all shadow-xs cursor-pointer"
+                          >
+                            {updatingId === t.id ? (
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5 stroke-[3.5]" />
+                            )}
+                            Setujui
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md font-bold">
+                            <Clock className="w-3 h-3" />
+                            Menunggu Finance
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recent Activity Table Preview */}
+      {dashboardConfig.showRecentActivity && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4 animate-fade-in font-sans">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-display font-bold text-slate-800 text-[15px]">Pencatatan Transaksi Terkini</h3>
+              <p className="text-xs text-slate-500">Daftar 5 pencatatan transaksi keuangan greenhouse terbaru.</p>
+            </div>
+            <button 
+              onClick={() => onNavigateToRecords()} 
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            >
+              Lihat Semua Transaksi
+              <ArrowUpRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {recentTxs.length === 0 ? (
+            <div className="text-center py-10 bg-slate-50 rounded-xl text-xs text-slate-400 font-medium">
+              Belum ada transaksi terdaftar yang sesuai dengan filter.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-100">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/75 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Tanggal</th>
+                    <th className="py-3 px-4">Proyek</th>
+                    <th className="py-3 px-4">Kategori</th>
+                    <th className="py-3 px-4 text-right">Uang Masuk</th>
+                    <th className="py-3 px-4 text-right">Uang Keluar</th>
+                    <th className="py-3 px-4">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody className="text-xs text-slate-600 divide-y divide-slate-100">
+                  {recentTxs.map(t => (
+                    <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-medium text-slate-500">{formatIndonesianDate(t.date)}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold ${getProjectBadgeClass(t.project)}`}>
+                          {t.project}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md">{t.category}</span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600">
+                        {t.type === 'Inflow' ? `+ Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-rose-600">
+                        {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-xs break-words whitespace-normal" title={t.description}>
+                        <span>{t.description}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Lightbox attachment modal view */}
+      {lightboxImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-all animate-fade-in no-print backdrop-blur-xs">
+          <div className="relative max-w-2xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl border border-slate-100 flex flex-col">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm">Lampiran Bukti Transaksi</h3>
+              <button 
+                onClick={() => setLightboxImage(null)}
+                className="p-1 px-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 hover:text-slate-705 transition font-bold text-xs cursor-pointer"
+              >
+                Tutup ✕
+              </button>
+            </div>
+            <div className="p-6 flex items-center justify-center max-h-[70vh] bg-slate-50 overflow-y-auto">
+              {lightboxImage.startsWith('data:') || lightboxImage.startsWith('http') ? (
+                <img 
+                  src={lightboxImage} 
+                  alt="Bukti Lampiran" 
+                  referrerPolicy="no-referrer"
+                  className="max-h-full max-w-full rounded-2xl object-contain border shadow-sm"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 text-slate-400 font-semibold text-center">
+                  <ShieldAlert className="w-10 h-10 text-amber-500 animate-pulse" />
+                  <p className="text-slate-650 truncate max-w-md">{lightboxImage}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

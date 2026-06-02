@@ -18,10 +18,11 @@ import AdminLogsView from './components/AdminLogsView';
 import SystemSettingsView from './components/SystemSettingsView';
 import ReconciliationView from './components/ReconciliationView';
 import BalanceSheetView from './components/BalanceSheetView';
+import DashboardConfigView from './components/DashboardConfigView';
 import { 
   Sprout, LogOut, LayoutDashboard, ScrollText, FileBarChart2, 
   BrainCircuit, Users2, Database, Shield, KeyRound, Menu, X, ArrowUpRight, CheckCircle, RefreshCw, Key, Layers,
-  Eye, EyeOff, AlertTriangle, Settings, CheckSquare, Scale
+  Eye, EyeOff, AlertTriangle, Settings, CheckSquare, Scale, SlidersHorizontal
 } from 'lucide-react';
 
 const GOOGLE_APPS_SCRIPT_CODE = `// GOOGLE APPS SCRIPT DATABASE CONNECTOR (Code.gs)
@@ -681,6 +682,7 @@ export default function App() {
 
     if (role === 'Admin') {
       items.push({ id: 'pengguna', name: 'Kelola Hak Akses', icon: Users2 });
+      items.push({ id: 'dashboard-config', name: 'Kelola Dashboard per Role', icon: SlidersHorizontal });
     }
 
     if (role === 'Admin' || role === 'Accounting') {
@@ -1373,7 +1375,14 @@ export default function App() {
               onNavigateToRecords={handleNavigateToRecords}
               config={dbConfig}
               currentRole={currentUser.role}
+              usersList={usersList}
+              onUpdateTransaction={handleUpdateTx}
+              currentUser={currentUser.username}
             />
+          )}
+
+          {activeTab === 'dashboard-config' && currentUser.role === 'Admin' && (
+            <DashboardConfigView />
           )}
 
           {activeTab === 'keuangan' && (
