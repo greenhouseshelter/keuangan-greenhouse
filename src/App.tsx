@@ -1092,7 +1092,7 @@ export default function App() {
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 md:hidden transition-all">
             <div className="w-72 bg-white h-full p-6 flex flex-col justify-between text-slate-800 border-r border-slate-200 animate-in slide-in-from-left duration-200 shadow-xl">
-              <div className="space-y-6">
+              <div className="space-y-6 flex-1 overflow-y-auto scrollbar-thin pr-1">
                 <div className="flex justify-between items-center pb-4 border-b border-slate-200">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-xs">
@@ -1176,7 +1176,7 @@ export default function App() {
               const isSidebarExpanded = sidebarPinned || sidebarHovered;
               return (
                 <>
-                  <div className={`space-y-6 transition-all duration-300 ${isSidebarExpanded ? 'p-6' : 'p-3'}`}>
+                  <div className={`space-y-6 transition-all duration-300 ${isSidebarExpanded ? 'p-6' : 'p-3'} flex-1 overflow-y-auto scrollbar-thin`}>
                     <div className="pb-4 border-b border-slate-100">
                       <div className={`flex items-center gap-2.5 bg-slate-50 border border-slate-200 transition-all duration-300 ${
                         isSidebarExpanded ? 'p-2.5 rounded-xl' : 'p-1.5 rounded-lg justify-center'
