@@ -91,7 +91,7 @@ export default function SystemSettingsView({ currentUsername, currentRole }: Sys
             </h1>
           </div>
           <p className="text-xs text-slate-500 max-w-2xl leading-relaxed">
-            Konfigurasikan apakah input bukti gambar transaksi hukumnya wajib atau opsional untuk seluruh operasional kebun baik uang masuk maupun uang keluar.
+            Konfigurasikan apakah input bukti gambar transaksi hukumnya wajib atau opsional untuk seluruh operasional greenhouse baik uang masuk maupun uang keluar.
           </p>
         </div>
 

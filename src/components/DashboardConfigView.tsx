@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Role } from '../types';
 import { addActivityLog } from '../utils/activityLogger';
+import { getDashboardSettings, saveDashboardSettings } from '../utils/db';
 import { 
   Sliders, Layout, Eye, EyeOff, Save, CheckCircle, RotateCcw, 
   TrendingUp, TrendingDown, Landmark, Percent, PieChart, BarChart3, 
@@ -74,10 +75,20 @@ export default function DashboardConfigView() {
 
   // Load configs on mount
   useEffect(() => {
-    const saved = localStorage.getItem('greenhouse_dashboard_roles_config');
-    if (saved) {
+    const loadConfigs = async () => {
       try {
-        const parsed = JSON.parse(saved);
+        // Try fetching from Google Sheet first
+        const sheetPrefs = await getDashboardSettings();
+        let parsed = sheetPrefs;
+
+        if (!parsed) {
+          // If not in sheets, read from localStorage
+          const saved = localStorage.getItem('greenhouse_dashboard_roles_config');
+          if (saved) {
+            parsed = JSON.parse(saved);
+          }
+        }
+
         if (parsed) {
           // Merge to avoid missing fields if any
           const mergedConfigs = { ...DEFAULT_ROLE_CONFIGS };
@@ -87,11 +98,14 @@ export default function DashboardConfigView() {
             }
           });
           setConfigs(mergedConfigs);
+          // Set to localStorage to propagate immediately
+          localStorage.setItem('greenhouse_dashboard_roles_config', JSON.stringify(mergedConfigs));
         }
       } catch (err) {
         console.error('Failed to parse dashboard role configs:', err);
       }
-    }
+    };
+    loadConfigs();
   }, []);
 
   const handleToggle = (role: Role, key: keyof DashboardRoleConfig) => {
@@ -104,17 +118,25 @@ export default function DashboardConfigView() {
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
+      // Save locally
       localStorage.setItem('greenhouse_dashboard_roles_config', JSON.stringify(configs));
+      
+      // Save to Google Sheets
+      const success = await saveDashboardSettings(configs);
       
       addActivityLog(
         'UBAH_PENGATURAN_DASHBOARD',
         `Admin mengubah tata letak / visibilitas dashboard untuk role user`
       );
       
-      setSuccessMsg(`Konfigurasi Dashboard untuk seluruh role berhasil disimpan ke penyimpanan lokal!`);
+      if (success) {
+        setSuccessMsg(`Konfigurasi Dashboard untuk seluruh role berhasil disimpan ke Google Sheets (sheet Settings) & penyimpanan lokal!`);
+      } else {
+        setSuccessMsg(`Konfigurasi Dashboard disimpan secara lokal (gagal menyinkronkan ke Google Sheets).`);
+      }
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err) {
       alert('Gagal menyimpan konfigurasi dashboard.');
@@ -123,11 +145,20 @@ export default function DashboardConfigView() {
     }
   };
 
-  const handleResetToDefaults = () => {
+  const handleResetToDefaults = async () => {
     if (window.confirm('Apakah Anda yakin ingin memulihkan pengaturan visibilitas dashboard ke standar/default pabrik?')) {
       setConfigs(DEFAULT_ROLE_CONFIGS);
       localStorage.setItem('greenhouse_dashboard_roles_config', JSON.stringify(DEFAULT_ROLE_CONFIGS));
-      setSuccessMsg('Pengaturan dashboard berhasil dipulihkan ke default!');
+      
+      setSaving(true);
+      const success = await saveDashboardSettings(DEFAULT_ROLE_CONFIGS);
+      setSaving(false);
+      
+      if (success) {
+        setSuccessMsg('Pengaturan dashboard berhasil dipulihkan ke default di Google Sheets & Lokal!');
+      } else {
+        setSuccessMsg('Pengaturan dashboard dipulihkan secara lokal (gagal menyelaraskan ke Google Sheets default).');
+      }
       setTimeout(() => setSuccessMsg(null), 4000);
       addActivityLog(
         'RESET_PENGATURAN_DASHBOARD',
@@ -137,10 +168,10 @@ export default function DashboardConfigView() {
   };
 
   const displayRoles: { id: Role; label: string; desc: string }[] = [
-    { id: 'Admin', label: 'Admin Utama', desc: 'Akses penuh seluruh konfigurasi kebun.' },
+    { id: 'Admin', label: 'Admin Utama', desc: 'Akses penuh seluruh konfigurasi greenhouse.' },
     { id: 'Finance', label: 'Finance / Verifikator', desc: 'Verifikasi keuangan & rekonsiliasi kas.' },
     { id: 'Accounting', label: 'Accounting / Akuntan', desc: 'Laporan neraca keuangan & laba rugi.' },
-    { id: 'Pengelola', label: 'Pengelola Lapangan', desc: 'Pencatatan real-time di kebun greenhouse.' }
+    { id: 'Pengelola', label: 'Pengelola Lapangan', desc: 'Pencatatan real-time di greenhouse.' }
   ];
 
   const activeConf = configs[activeRoleTab];
@@ -339,7 +370,7 @@ export default function DashboardConfigView() {
                       <PieChart className="w-4 h-4 text-indigo-550" />
                       <h4 className="text-xs font-bold text-slate-800">Proporsi Alokasi Dana per Proyek (Pie Charts)</h4>
                     </div>
-                    <p className="text-[10.5px] text-slate-450 leading-relaxed font-sans pr-4">Menampilkan porsi kontribusi (%) pemasukan dan pengeluaran kebun dalam diagram lingkaran konsentris.</p>
+                    <p className="text-[10.5px] text-slate-450 leading-relaxed font-sans pr-4">Menampilkan porsi kontribusi (%) pemasukan dan pengeluaran greenhouse dalam diagram lingkaran konsentris.</p>
                   </div>
                   <input
                     type="checkbox"
@@ -373,7 +404,7 @@ export default function DashboardConfigView() {
                       <Layers className="w-4 h-4 text-indigo-550" />
                       <h4 className="text-xs font-bold text-slate-800">Sektor Biaya Operasional / Non-Operasional</h4>
                     </div>
-                    <p className="text-[10.5px] text-slate-450 leading-relaxed font-sans pr-4">Menampilkan rincian rasio pembelanjaan operational langsung di kebun greenhouse dibanding biaya eksternal.</p>
+                    <p className="text-[10.5px] text-slate-450 leading-relaxed font-sans pr-4">Menampilkan rincian rasio pembelanjaan operational langsung di greenhouse dibanding biaya eksternal.</p>
                   </div>
                   <input
                     type="checkbox"
@@ -432,7 +463,7 @@ export default function DashboardConfigView() {
           <div className="bg-slate-50 border border-slate-150 p-4 rounded-2xl text-[10.5px] leading-relaxed text-slate-500 font-medium flex gap-2">
             <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <div>
-              Setiap kali Anda menekan tombol <strong className="text-slate-800">"Simpan Perubahan"</strong> di pojok kanan atas, perubahan visibilitas akan segera memengaruhi tampilan Dasbor utama bagi pengguna dengan peran tersebut demi keamanan data rahasia kebun.
+              Setiap kali Anda menekan tombol <strong className="text-slate-800">"Simpan Perubahan"</strong> di pojok kanan atas, perubahan visibilitas akan segera memengaruhi tampilan Dasbor utama bagi pengguna dengan peran tersebut demi keamanan data rahasia greenhouse.
             </div>
           </div>
         </div>

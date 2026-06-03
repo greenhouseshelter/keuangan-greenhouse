@@ -1228,7 +1228,7 @@ export default function TransactionView({
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:bg-white"
             >
               <option value="All">Semua Kategori</option>
-              <option value="Operational">Operasional Kebun</option>
+              <option value="Operational">Operasional Greenhouse</option>
               <option value="Non-Operational">Non-Operational</option>
             </select>
           </div>
@@ -1918,7 +1918,7 @@ export default function TransactionView({
                             currentRole === 'Pengelola' ? 'opacity-85 cursor-not-allowed bg-slate-100' : ''
                           }`}
                         >
-                          <option value="Operational">Operasional Kebun</option>
+                          <option value="Operational">Operasional Greenhouse</option>
                           <option value="Non-Operational">Non-Operasional</option>
                         </select>
                         {currentRole === 'Pengelola' && (

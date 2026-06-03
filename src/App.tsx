@@ -56,7 +56,7 @@ function doGet(e) {
           { id: 'acc_1', name: 'Penjualan Melon', type: 'Project' },
           { id: 'acc_2', name: 'Penjualan Cabe', type: 'Project' },
           { id: 'acc_3', name: 'Penjualan Siraman Alat', type: 'Project' },
-          { id: 'acc_4', name: 'Kas Kecil Kebun', type: 'All' },
+          { id: 'acc_4', name: 'Kas Kecil Greenhouse', type: 'All' },
           { id: 'acc_5', name: 'Kas Besar', type: 'All' }
         ];
         writeSheetData(ss, 'Accounts', accounts);

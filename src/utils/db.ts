@@ -537,3 +537,54 @@ export async function clearActivityLogsOnSheets(): Promise<boolean> {
     return false;
   }
 }
+
+let inMemoryDashboardSettings: any = null;
+
+export async function getDashboardSettings(): Promise<any | null> {
+  if (inMemoryDashboardSettings) {
+    return inMemoryDashboardSettings;
+  }
+  const config = getDatabaseConfig();
+  const url = `${config.sheetsApiUrl}?action=getSettings`;
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET' });
+    if (res.ok) {
+      const responseJson = await res.json();
+      if (responseJson.status === 'success' && Array.isArray(responseJson.data)) {
+        for (const row of responseJson.data) {
+          if (row.key === 'dashboardRolesConfig') {
+            try {
+              const parsed = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+              inMemoryDashboardSettings = parsed;
+              return parsed;
+            } catch (e) {
+              console.warn("Gagal parse dashboardRolesConfig dari JSON:", e);
+              return null;
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Gagal mengambil pengaturan dasbor dari Google Sheets:", err);
+  }
+  return null;
+}
+
+export async function saveDashboardSettings(configs: any): Promise<boolean> {
+  const config = getDatabaseConfig();
+  try {
+    const res = await fetchWithTimeout(config.sheetsApiUrl, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'updateSettings', key: 'dashboardRolesConfig', value: configs }),
+    });
+    if (res.ok) {
+      inMemoryDashboardSettings = configs;
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn("Gagal menyimpan pengaturan dasbor ke Google Sheets:", err);
+    return false;
+  }
+}

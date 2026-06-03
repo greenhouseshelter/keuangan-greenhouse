@@ -413,7 +413,7 @@ export default function ReconciliationView({
         <div className="space-y-1">
           <p className="font-extrabold text-blue-800">Bagaimana Cara Kerja Rekonsiliasi?</p>
           <p className="font-normal text-blue-700">
-            Agar operasional peternakan/perkebunan berjalan tertib, pemasukan yang dikirim tim Pengelola lapangan berstatus <strong>Pending</strong>. Pengelola hanya bisa mencatat ke sistem, sedangkan verifikasi nominal riil kas dilakukan oleh <strong>Finance</strong>. Selama transaksi belum disetujui (belum dicentang di sini), nominalnya tidak akan dimasukkan ke hitungan omzet, laporan laba-rugi, ataupun visualisasi grafik analitik.
+            Agar operasional greenhouse berjalan tertib, pemasukan yang dikirim tim Pengelola lapangan berstatus <strong>Pending</strong>. Pengelola hanya bisa mencatat ke sistem, sedangkan verifikasi nominal riil kas dilakukan oleh <strong>Finance</strong>. Selama transaksi belum disetujui (belum dicentang di sini), nominalnya tidak akan dimasukkan ke hitungan omzet, laporan laba-rugi, ataupun visualisasi grafik analitik.
           </p>
         </div>
       </div>

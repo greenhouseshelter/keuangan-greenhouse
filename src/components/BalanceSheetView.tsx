@@ -400,7 +400,7 @@ export default function BalanceSheetView({ transactions }: BalanceSheetViewProps
                 <div className="flex justify-between py-1.5 border-b border-slate-100/65 dark:border-slate-900 text-slate-650 dark:text-slate-400">
                   <div className="space-y-0.5">
                     <span className="font-medium text-slate-805 dark:text-slate-300 block">Kas dan Setara Kas</span>
-                    <span className="text-[10px] text-slate-450 block leading-tight">Uang kas bank, simpanan operasi kebun</span>
+                    <span className="text-[10px] text-slate-450 block leading-tight">Uang kas bank, simpanan operasi greenhouse</span>
                   </div>
                   <span className={`font-mono font-bold ${cashAndEquivalents >= 0 ? 'text-slate-800 dark:text-slate-200' : 'text-rose-500'}`}>
                     Rp {cashAndEquivalents.toLocaleString('id-ID')}
@@ -550,7 +550,7 @@ export default function BalanceSheetView({ transactions }: BalanceSheetViewProps
                 <div className="flex justify-between py-1.5 border-b border-slate-100/65 dark:border-slate-900 text-slate-650 dark:text-slate-400">
                   <div className="space-y-0.5">
                     <span className="font-medium text-slate-805 dark:text-slate-300 block">Modal Awal Disetor</span>
-                    <span className="text-[10px] text-slate-450 block leading-tight">Setoran modal pendiri awal pembangunan kebun</span>
+                    <span className="text-[10px] text-slate-450 block leading-tight">Setoran modal pendiri awal pembangunan greenhouse</span>
                   </div>
                   <span className="font-mono text-slate-800 dark:text-slate-200">
                     Rp {capital.toLocaleString('id-ID')}

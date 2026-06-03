@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, Project, DatabaseConfig, Role, User } from '../types';
-import { getProjects } from '../utils/db';
+import { getProjects, getDashboardSettings } from '../utils/db';
 import { formatIndonesianDate } from '../utils/date';
 import { isTxApproved } from '../utils/approvalHelper';
 import { addActivityLog } from '../utils/activityLogger';
@@ -746,7 +746,7 @@ export default function DashboardView({
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6 flex flex-col justify-between">
               <div>
                 <h3 className="font-display font-bold text-slate-800 text-[14px]">Sektor Biaya Operasional</h3>
-                <p className="text-xs text-slate-500">Breakdown pembelanjaan operasional kebun vs non-operasional.</p>
+                <p className="text-xs text-slate-500">Breakdown pembelanjaan operasional greenhouse vs non-operasional.</p>
               </div>
 
               {/* Graphical donut comparison representation using custom styled metrics */}
@@ -754,7 +754,7 @@ export default function DashboardView({
                 {/* Operational distribution info */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Operasional Kebun</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Operasional Greenhouse</span>
                     <div className="mt-2">
                       <span className="text-xs block text-slate-400">Total Biaya:</span>
                       <span className="text-sm font-bold font-mono text-slate-800 block">Rp {opsOutflow.toLocaleString('id-ID')}</span>
@@ -807,7 +807,7 @@ export default function DashboardView({
               </div>
 
               <div className="border-t border-slate-100 pt-3 text-[10px] text-slate-450 italic">
-                *Pengelola hanya diperbolehkan menginput transaksi operasional kebun directly.
+                *Pengelola hanya diperbolehkan menginput transaksi operasional greenhouse directly.
               </div>
             </div>
           ) : null}
