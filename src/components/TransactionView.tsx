@@ -615,10 +615,11 @@ export default function TransactionView({
       return;
     }
 
-    const isSalesAccount = formAccount.toLowerCase().includes('penjualan');
+    const selectedAccObj = accountsList.find(a => a.name === formAccount);
+    const isSalesAccount = formAccount.toLowerCase().includes('penjualan') || !!selectedAccObj?.requireWeight;
     if (isSalesAccount) {
       if (formWeight === '' || Number(formWeight) <= 0) {
-        setFormError('Lengkapi nilai Berat dalam kg untuk transaksi akun Penjualan.');
+        setFormError(`Lengkapi nilai Berat dalam kg untuk transaksi akun ${formAccount}.`);
         return;
       }
     }
@@ -1579,7 +1580,7 @@ export default function TransactionView({
                         {t.type === 'Outflow' ? `- Rp ${t.amount.toLocaleString('id-ID')}` : '-'}
                       </td>
                       <td className="py-4 px-4 text-center font-mono font-bold text-slate-700 text-xs">
-                        {t.account?.toLowerCase().includes('penjualan') && t.weight !== undefined && t.weight !== null ? `${t.weight} kg` : '-'}
+                        {t.weight !== undefined && t.weight !== null && t.weight > 0 ? `${t.weight} kg` : '-'}
                       </td>
                       <td className="py-4 px-4 text-slate-600 max-w-xs break-words whitespace-normal animate-none" title={t.description}>
                         <div className="flex flex-col gap-1.5 justify-start items-start">
@@ -1960,8 +1961,8 @@ export default function TransactionView({
                       )}
                     </div>
 
-                    {/* Weight (Kg) khusus untuk transaksi Penjualan */}
-                    {formAccount?.toLowerCase().includes('penjualan') && (
+                    {/* Weight (Kg) khusus untuk transaksi Penjualan atau akun dengan isian berat aktif */}
+                    {(formAccount?.toLowerCase().includes('penjualan') || accountsList.find(a => a.name === formAccount)?.requireWeight) && (
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1">
                         <label className="block text-slate-500 font-semibold uppercase text-[10px]">Berat Hasil Panen (kg)</label>
                         <div className="relative">
@@ -1979,7 +1980,7 @@ export default function TransactionView({
                           />
                           <span className="absolute inset-y-0 right-3 flex items-center font-bold text-slate-400 text-[11px] select-none">kg</span>
                         </div>
-                        <p className="text-[10px] text-slate-400 italic font-medium">*Khusus akun penjualan, kolom berat wajib diisi lengkap.</p>
+                        <p className="text-[10px] text-slate-400 italic font-medium">*Khusus akun ini, kolom berat wajib diisi lengkap.</p>
                       </div>
                     )}
 

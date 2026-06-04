@@ -46,6 +46,7 @@ export interface Account {
   id: string;
   name: string;
   type: 'Project' | 'All';
+  requireWeight?: boolean;
 }
 
 export interface DatabaseConfig {

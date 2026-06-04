@@ -13,6 +13,7 @@ export default function AdminAccountsView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<'Project' | 'All'>('Project');
+  const [requireWeight, setRequireWeight] = useState<boolean>(false);
   
   const [notif, setNotif] = useState<{ type: 'success' | 'err'; message: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -43,6 +44,7 @@ export default function AdminAccountsView() {
     setEditingId(null);
     setName('');
     setType('Project');
+    setRequireWeight(false);
   };
 
   const handleStartEdit = (account: Account) => {
@@ -50,6 +52,7 @@ export default function AdminAccountsView() {
     setEditingId(account.id);
     setName(account.name);
     setType(account.type);
+    setRequireWeight(!!account.requireWeight);
     
     // Scroll form into view gently
     const formElement = document.getElementById('account-form-card');
@@ -73,14 +76,16 @@ export default function AdminAccountsView() {
           id: editingId,
           name: name.trim(),
           type,
+          requireWeight,
         };
         const ok = await updateAccount(updated);
         if (ok) {
-          addActivityLog('EDIT_AKUN', `Mengubah akun keuangan "${updated.name}" (Tipe: ${updated.type})`);
+          addActivityLog('EDIT_AKUN', `Mengubah akun keuangan "${updated.name}" (Tipe: ${updated.type}, Isian Berat: ${updated.requireWeight ? 'Aktif' : 'Nonaktif'})`);
           showNotification('success', `Akun "${updated.name}" berhasil diperbarui.`);
           setIsEditing(false);
           setEditingId(null);
           setName('');
+          setRequireWeight(false);
         } else {
           throw new Error('Gagal memperbarui database.');
         }
@@ -90,12 +95,14 @@ export default function AdminAccountsView() {
           id: `acc-${Date.now()}`,
           name: name.trim(),
           type,
+          requireWeight,
         };
         const ok = await addAccount(newAcc);
         if (ok) {
-          addActivityLog('TAMBAH_AKUN', `Menambahkan akun keuangan baru "${newAcc.name}" (Tipe: ${newAcc.type})`);
+          addActivityLog('TAMBAH_AKUN', `Menambahkan akun keuangan baru "${newAcc.name}" (Tipe: ${newAcc.type}, Isian Berat: ${newAcc.requireWeight ? 'Aktif' : 'Nonaktif'})`);
           showNotification('success', `Akun "${newAcc.name}" berhasil ditambahkan.`);
           setName('');
+          setRequireWeight(false);
         } else {
           throw new Error('Gagal menambah ke database.');
         }
@@ -204,6 +211,20 @@ export default function AdminAccountsView() {
               </select>
             </div>
 
+            <div className="flex items-start gap-2 bg-slate-50 border border-slate-150 p-3 rounded-xl">
+              <input
+                type="checkbox"
+                id="requireWeight"
+                name="requireWeight"
+                checked={requireWeight}
+                onChange={(e) => setRequireWeight(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="requireWeight" className="block text-slate-600 font-semibold leading-relaxed cursor-pointer select-none text-[10.5px]">
+                Aktifkan pilihan isian Berat (kg)
+              </label>
+            </div>
+
             <div className="pt-2 flex items-center gap-2.5">
               <button
                 type="submit"
@@ -259,6 +280,13 @@ export default function AdminAccountsView() {
                         }`}>
                           {acc.type === 'Project' ? 'Project' : 'All (Non-Project)'}
                         </span>
+
+                        {acc.requireWeight && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-250 flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
+                            Isian Berat (kg) Aktif
+                          </span>
+                        )}
                         
                         <span className="text-[9.5px] text-slate-450 font-medium">
                           {acc.type === 'Project' 
