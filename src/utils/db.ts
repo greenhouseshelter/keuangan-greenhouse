@@ -28,7 +28,7 @@ export function saveDatabaseConfig(config: DatabaseConfig) {
   // Connection parameters are stored and handled securely on the backend only
 }
 
-export async function fetchWithTimeout(resource: string, options: any = {}, timeout = 15000): Promise<Response> {
+export async function fetchWithTimeout(resource: string, options: any = {}, timeout = 30000): Promise<Response> {
   let targetUrl = resource;
   const isProxyUrl = targetUrl.includes('/api/sheets-proxy');
   const isDirectGoogleUrl = targetUrl.startsWith('https://script.google.com');
@@ -91,6 +91,16 @@ export async function fetchWithTimeout(resource: string, options: any = {}, time
 
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
+
+  // Link parent abort signal if present
+  if (options.signal) {
+    if (options.signal.aborted) {
+      controller.abort();
+    } else {
+      const onAbort = () => controller.abort();
+      options.signal.addEventListener('abort', onAbort);
+    }
+  }
 
   try {
     const headers: Record<string, string> = { ...(options.headers || {}) };

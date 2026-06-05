@@ -476,7 +476,7 @@ export default function App() {
   const testGoogleSheetsConnection = async (): Promise<boolean> => {
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 12000); // 12s timeout for stability
+      const id = setTimeout(() => controller.abort(), 30000); // 30s timeout for stability
       
       const response = await fetchWithTimeout('/api/sheets-proxy?action=getSettings&_t=' + Date.now(), {
         method: 'GET',
