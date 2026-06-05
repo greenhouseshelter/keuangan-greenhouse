@@ -338,17 +338,40 @@ export default function DashboardView({
 
   // Re-load configurations if current role changes, or on mount
   useEffect(() => {
-    const saved = localStorage.getItem('greenhouse_dashboard_roles_config');
-    if (saved) {
+    const applyConfig = (parsed: any) => {
+      if (parsed && currentRole && parsed[currentRole]) {
+         setDashboardConfig(parsed[currentRole]);
+      } else {
+         setDashboardConfig(DEFAULT_ROLE_CONFIGS[currentRole || 'Pengelola'] || DEFAULT_ROLE_CONFIGS['Pengelola']);
+      }
+    };
+
+    const loadRemoteConfig = async () => {
+      // 1. Try to load from localStorage first for an instant draw
+      const saved = localStorage.getItem('greenhouse_dashboard_roles_config');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          applyConfig(parsed);
+        } catch (err) {}
+      } else {
+        setDashboardConfig(DEFAULT_ROLE_CONFIGS[currentRole || 'Pengelola'] || DEFAULT_ROLE_CONFIGS['Pengelola']);
+      }
+
+      // 2. Fetch the latest live settings from Google Sheets
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed && currentRole && parsed[currentRole]) {
-          setDashboardConfig(parsed[currentRole]);
-          return;
+        const sheetPrefs = await getDashboardSettings();
+        if (sheetPrefs) {
+          // Cache in localStorage to keep in sync
+          localStorage.setItem('greenhouse_dashboard_roles_config', JSON.stringify(sheetPrefs));
+          applyConfig(sheetPrefs);
         }
-      } catch (err) {}
-    }
-    setDashboardConfig(DEFAULT_ROLE_CONFIGS[currentRole || 'Pengelola'] || DEFAULT_ROLE_CONFIGS['Pengelola']);
+      } catch (err) {
+        console.warn('Gagal memuat pengaturan dasbor live dari Google Sheets:', err);
+      }
+    };
+
+    loadRemoteConfig();
   }, [currentRole]);
 
   useEffect(() => {
