@@ -272,6 +272,7 @@ const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: true,
     showRecentActivity: true,
     showReconciliation: true,
+    showTotalWeight: true,
   },
   Finance: {
     showTotalInflow: true,
@@ -283,6 +284,7 @@ const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: true,
     showRecentActivity: true,
     showReconciliation: true,
+    showTotalWeight: true,
   },
   Accounting: {
     showTotalInflow: true,
@@ -294,6 +296,7 @@ const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: true,
     showRecentActivity: true,
     showReconciliation: false,
+    showTotalWeight: true,
   },
   Pengelola: {
     showTotalInflow: true,
@@ -305,6 +308,7 @@ const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: false,
     showRecentActivity: true,
     showReconciliation: false,
+    showTotalWeight: true,
   }
 };
 
@@ -485,9 +489,18 @@ export default function DashboardView({
   const netProfit = totalInflow - totalOutflow;
   const netProfitMargin = totalInflow > 0 ? (netProfit / totalInflow) * 100 : 0;
 
-  // Calculate total sold weight (kg) from all approved Inflows
+  // Calculate total sold weight (kg) from all Inflows (including unapproved/pending reconciliation) excluding Greenhouse
   const totalWeight = filteredTxs
-    .filter(t => t.type === 'Inflow' && isTxApproved(t) && t.weight !== undefined && t.weight !== null)
+    .filter(t => t.type === 'Inflow' && t.weight !== undefined && t.weight !== null && t.project?.toLowerCase() !== 'greenhouse')
+    .reduce((sum, t) => sum + (t.weight || 0), 0);
+
+  // Calculate verified (approved) and unverified weight
+  const verifiedWeight = filteredTxs
+    .filter(t => t.type === 'Inflow' && isTxApproved(t) && t.weight !== undefined && t.weight !== null && t.project?.toLowerCase() !== 'greenhouse')
+    .reduce((sum, t) => sum + (t.weight || 0), 0);
+
+  const unverifiedWeight = filteredTxs
+    .filter(t => t.type === 'Inflow' && !isTxApproved(t) && t.weight !== undefined && t.weight !== null && t.project?.toLowerCase() !== 'greenhouse')
     .reduce((sum, t) => sum + (t.weight || 0), 0);
 
   // Project breakdown calculations
@@ -499,7 +512,9 @@ export default function DashboardView({
     const pNet = pIn - pOut;
     const pMargin = pIn > 0 ? (pNet / pIn) * 105 : 0; // Keep the margin formulas consistent or use standard math:
     const pMarginStandard = pIn > 0 ? (pNet / pIn) * 100 : 0;
-    const pWeight = pTxs.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.weight !== undefined && t.weight !== null).reduce((sum, t) => sum + (t.weight || 0), 0);
+    const pWeight = proj.toLowerCase() !== 'greenhouse'
+      ? pTxs.filter(t => t.type === 'Inflow' && t.weight !== undefined && t.weight !== null).reduce((sum, t) => sum + (t.weight || 0), 0)
+      : 0;
     return {
       name: proj,
       inflow: pIn,
@@ -510,6 +525,17 @@ export default function DashboardView({
       weight: pWeight
     };
   });
+
+  // Calculate separate project details specifically for weight (kg), excluding Greenhouse
+  const kgProjectStats = projectStats
+    .filter(p => p.name.toLowerCase() !== 'greenhouse')
+    .map(p => {
+      const pct = totalWeight > 0 ? (p.weight / totalWeight) * 100 : 0;
+      return {
+        ...p,
+        percentage: pct
+      };
+    });
 
   // Category breakdown calculations (Operational vs Non-Operational)
   const opsInflow = filteredTxs.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.category === 'Operational').reduce((sum, t) => sum + t.amount, 0);
@@ -598,29 +624,6 @@ export default function DashboardView({
           </div>
         ) : null}
 
-        {/* TOTAL SALES WEIGHT */}
-        {dashboardConfig.showTotalInflow ? (
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs hover:border-teal-300 hover:shadow-xs transition-all duration-300 animate-fade-in">
-            <div className="flex justify-between items-start col-span-1">
-              <div className="p-3 bg-teal-50 text-teal-600 rounded-xl">
-                <Scale className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md flex items-center gap-1">
-                ⚖️ BERAT
-              </span>
-            </div>
-            <div className="mt-4">
-              <p className="text-xs text-slate-500 font-medium font-display">Berat Penjualan</p>
-              <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
-                {totalWeight.toLocaleString('id-ID')} kg
-              </h3>
-            </div>
-            <div className="mt-3 text-[10px] text-slate-400">
-              Total volume hasil panen terjual
-            </div>
-          </div>
-        ) : null}
-
         {/* TOTAL OUTFLOW */}
         {dashboardConfig.showTotalOutflow ? (
           <div 
@@ -643,6 +646,104 @@ export default function DashboardView({
             </div>
             <div className="mt-3 text-[10px] text-slate-400">
               Terbagi dalam {outflows.length} transaksi pembelanjaan
+            </div>
+          </div>
+        ) : null}
+
+        {/* TOTAL SALES WEIGHT */}
+        {dashboardConfig.showTotalWeight ?? true ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs hover:border-teal-300 hover:shadow-xs transition-all duration-300 animate-fade-in flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-start col-span-1">
+                <div className="p-3 bg-teal-50 text-teal-600 rounded-xl">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  ⚖️ BERAT
+                </span>
+              </div>
+              <div className="mt-4">
+                <p className="text-xs text-slate-500 font-medium font-display">Berat Penjualan</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 font-mono">
+                    {totalWeight.toLocaleString('id-ID')}
+                  </h3>
+                  <span className="text-xs font-bold text-slate-500 ml-1">kg</span>
+                </div>
+              </div>
+              <div className="mt-2 text-[10px] text-slate-400">
+                Total volume hasil panen terjual (selain Greenhouse)
+              </div>
+              
+              {/* Verified vs Unverified breakdown details */}
+              <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+                <div className="flex items-center gap-1.5" title="Sudah diverifikasi oleh Finance">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-slate-500">Verifikasi:</span>
+                  <span className="font-bold text-slate-700 font-mono">{verifiedWeight.toLocaleString('id-ID')} kg</span>
+                </div>
+                <div className="flex items-center gap-1.5" title="Belum diverifikasi oleh Finance (Pending)">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span className="text-slate-500">Belum Verifikasi:</span>
+                  <span className="font-bold text-slate-700 font-mono">{unverifiedWeight.toLocaleString('id-ID')} kg</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Segmented Cumulative Progress Bar (Stacked Bar Chart representation) */}
+            {totalWeight > 0 && (
+              <div className="mt-4">
+                <p className="text-[10px] uppercase font-extrabold text-slate-400 tracking-wider mb-2">Diagram Kontribusi</p>
+                <div className="h-2.5 w-full bg-slate-100 rounded-full flex overflow-hidden shadow-inner" title="Kontribusi berat per proyek">
+                  {kgProjectStats.map((p) => {
+                    if (p.weight === 0) return null;
+                    return (
+                      <div
+                        key={p.name}
+                        className="h-full transition-all duration-500 hover:opacity-85 cursor-help"
+                        style={{
+                          width: `${p.percentage}%`,
+                          backgroundColor: getProjectHexColor(p.name),
+                        }}
+                        title={`${p.name}: ${p.weight.toLocaleString('id-ID')} kg (${p.percentage.toFixed(1)}%)`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+              <p className="text-[10px] uppercase font-extrabold text-slate-450 tracking-wider">Rincian per Proyek</p>
+              <div className="space-y-2">
+                {kgProjectStats.map(p => {
+                  return (
+                    <div key={p.name} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 flex items-center gap-1.5 truncate">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: getProjectHexColor(p.name) }}></span>
+                          {p.name}
+                        </span>
+                        <div className="flex items-center gap-1 font-mono">
+                          <span className="font-bold text-slate-700">{p.weight.toLocaleString('id-ID')} kg</span>
+                          <span className="text-[9px] text-slate-400">({p.percentage.toFixed(0)}%)</span>
+                        </div>
+                      </div>
+                      
+                      {/* Interactive contribution progress bar */}
+                      <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ 
+                            width: `${p.percentage}%`, 
+                            backgroundColor: getProjectHexColor(p.name) 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         ) : null}

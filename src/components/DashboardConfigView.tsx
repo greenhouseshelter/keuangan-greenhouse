@@ -5,7 +5,7 @@ import { getDashboardSettings, saveDashboardSettings } from '../utils/db';
 import { 
   Sliders, Layout, Eye, EyeOff, Save, CheckCircle, RotateCcw, 
   TrendingUp, TrendingDown, Landmark, Percent, PieChart, BarChart3, 
-  Layers, CheckSquare, Clock, ArrowRight, ShieldAlert
+  Layers, CheckSquare, Clock, ArrowRight, ShieldAlert, Scale
 } from 'lucide-react';
 
 export interface DashboardRoleConfig {
@@ -18,6 +18,7 @@ export interface DashboardRoleConfig {
   showOpsSplit: boolean;
   showRecentActivity: boolean;
   showReconciliation: boolean;
+  showTotalWeight: boolean; // Control visibility of Sales Weight (kg)
 }
 
 export const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
@@ -31,6 +32,7 @@ export const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: true,
     showRecentActivity: true,
     showReconciliation: true,
+    showTotalWeight: true,
   },
   Finance: {
     showTotalInflow: true,
@@ -42,6 +44,7 @@ export const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: true,
     showRecentActivity: true,
     showReconciliation: true,
+    showTotalWeight: true,
   },
   Accounting: {
     showTotalInflow: true,
@@ -53,6 +56,7 @@ export const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: true,
     showRecentActivity: true,
     showReconciliation: false,
+    showTotalWeight: true,
   },
   Pengelola: {
     showTotalInflow: true,
@@ -64,6 +68,7 @@ export const DEFAULT_ROLE_CONFIGS: Record<Role, DashboardRoleConfig> = {
     showOpsSplit: false,
     showRecentActivity: true,
     showReconciliation: false,
+    showTotalWeight: true,
   }
 };
 
@@ -350,6 +355,25 @@ export default function DashboardConfigView() {
                     type="checkbox"
                     checked={activeConf.showNetProfitMargin}
                     onChange={() => handleToggle(activeRoleTab, 'showNetProfitMargin')}
+                    className="w-4 h-4 text-slate-950 border-slate-300 rounded focus:ring-slate-950 cursor-pointer"
+                  />
+                </div>
+
+                {/* Total Weight Switch */}
+                <div className="p-3 bg-slate-50 hover:bg-slate-50/70 border border-slate-150 rounded-2xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-teal-50 text-teal-600 rounded-lg">
+                      <Scale className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-slate-800 block">Berat Penjualan</span>
+                      <span className="text-[10px] text-slate-450 block">Total volume panen terjual (kg)</span>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={activeConf.showTotalWeight ?? true}
+                    onChange={() => handleToggle(activeRoleTab, 'showTotalWeight')}
                     className="w-4 h-4 text-slate-950 border-slate-300 rounded focus:ring-slate-950 cursor-pointer"
                   />
                 </div>
