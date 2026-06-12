@@ -7,7 +7,8 @@ import { addActivityLog } from '../utils/activityLogger';
 import { 
   TrendingUp, TrendingDown, Landmark, Percent, ArrowUpRight, 
   ArrowDownRight, CircleDollarSign, Calendar, SlidersHorizontal, CheckSquare,
-  Image, Check, Clock, ShieldAlert, Loader2, RefreshCw, Lock, Unlock, Eye, EyeOff, HelpCircle
+  Image, Check, Clock, ShieldAlert, Loader2, RefreshCw, Lock, Unlock, Eye, EyeOff, HelpCircle,
+  Scale
 } from 'lucide-react';
 import { DashboardRoleConfig } from './DashboardConfigView';
 
@@ -484,6 +485,11 @@ export default function DashboardView({
   const netProfit = totalInflow - totalOutflow;
   const netProfitMargin = totalInflow > 0 ? (netProfit / totalInflow) * 100 : 0;
 
+  // Calculate total sold weight (kg) from all approved Inflows
+  const totalWeight = filteredTxs
+    .filter(t => t.type === 'Inflow' && isTxApproved(t) && t.weight !== undefined && t.weight !== null)
+    .reduce((sum, t) => sum + (t.weight || 0), 0);
+
   // Project breakdown calculations
   const projects: Project[] = projectsList.length > 0 ? projectsList : ['Melon', 'Cabe', 'Perikanan', 'Ternak'];
   const projectStats = projects.map(proj => {
@@ -491,14 +497,17 @@ export default function DashboardView({
     const pIn = pTxs.filter(t => t.type === 'Inflow' && isTxApproved(t)).reduce((sum, t) => sum + t.amount, 0);
     const pOut = pTxs.filter(t => t.type === 'Outflow').reduce((sum, t) => sum + t.amount, 0);
     const pNet = pIn - pOut;
-    const pMargin = pIn > 0 ? (pNet / pIn) * 100 : 0;
+    const pMargin = pIn > 0 ? (pNet / pIn) * 105 : 0; // Keep the margin formulas consistent or use standard math:
+    const pMarginStandard = pIn > 0 ? (pNet / pIn) * 100 : 0;
+    const pWeight = pTxs.filter(t => t.type === 'Inflow' && isTxApproved(t) && t.weight !== undefined && t.weight !== null).reduce((sum, t) => sum + (t.weight || 0), 0);
     return {
       name: proj,
       inflow: pIn,
       outflow: pOut,
       net: pNet,
-      margin: pMargin,
-      count: pTxs.length
+      margin: pMarginStandard,
+      count: pTxs.length,
+      weight: pWeight
     };
   });
 
@@ -561,7 +570,7 @@ export default function DashboardView({
       </div>
 
       {/* Financial Bento Matrix Card Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-sans">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 font-sans">
         
         {/* TOTAL INFLOW */}
         {dashboardConfig.showTotalInflow ? (
@@ -578,13 +587,36 @@ export default function DashboardView({
               </span>
             </div>
             <div className="mt-4">
-              <p className="text-xs text-slate-500 font-medium">Uang Masuk / Pendapatan</p>
+              <p className="text-xs text-slate-500 font-medium">Uang Masuk & Pendapatan</p>
               <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
                 Rp {totalInflow.toLocaleString('id-ID')}
               </h3>
             </div>
             <div className="mt-3 text-[10px] text-slate-400">
               Dari {inflows.length} transaksi pencatatan
+            </div>
+          </div>
+        ) : null}
+
+        {/* TOTAL SALES WEIGHT */}
+        {dashboardConfig.showTotalInflow ? (
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs hover:border-teal-300 hover:shadow-xs transition-all duration-300 animate-fade-in">
+            <div className="flex justify-between items-start col-span-1">
+              <div className="p-3 bg-teal-50 text-teal-600 rounded-xl">
+                <Scale className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+                ⚖️ BERAT
+              </span>
+            </div>
+            <div className="mt-4">
+              <p className="text-xs text-slate-500 font-medium font-display">Berat Penjualan</p>
+              <h3 className="text-xl lg:text-2xl font-display font-extrabold text-slate-800 mt-1 font-mono">
+                {totalWeight.toLocaleString('id-ID')} kg
+              </h3>
+            </div>
+            <div className="mt-3 text-[10px] text-slate-400">
+              Total volume hasil panen terjual
             </div>
           </div>
         ) : null}
@@ -719,10 +751,15 @@ export default function DashboardView({
                   return (
                     <div key={p.name} className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getProjectHexColor(p.name) }}></span>
                           <span className="text-xs font-semibold text-slate-700 font-display">Proyek {p.name}</span>
                           <span className="text-[10px] text-slate-405">({p.count} tx)</span>
+                          {p.weight > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold bg-teal-50 text-teal-600 border border-teal-100 flex items-center gap-0.5 ml-1">
+                              ⚖️ {p.weight.toLocaleString('id-ID')} kg
+                            </span>
+                          )}
                         </div>
                         <span className={`text-[10px] font-bold ${netIsPositive ? 'text-emerald-700' : 'text-rose-600'}`}>
                           Laba Bersih: Rp {p.net.toLocaleString('id-ID')}
